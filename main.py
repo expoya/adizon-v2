@@ -9,6 +9,7 @@ import os
 from dotenv import load_dotenv
 from agents.chat_handler import handle_chat
 from agents.crm_handler import handle_crm
+import requests
 
 # Environment Variables laden
 load_dotenv()
@@ -111,10 +112,76 @@ def test_intent(message: str):
         "intent": intent
     }
 
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+@app.post("/telegram-webhook")
+def telegram_webhook(request: dict):
+    """
+    Telegram Webhook - Production Endpoint
+    """
+    try:
+        # Telegram Message Format parsen
+        message_data = request.get("message", {})
+        chat_id = message_data.get("chat", {}).get("id")
+        user_message = message_data.get("text", "")
+        user_name = message_data.get("from", {}).get("first_name", "Unknown")
+        user_id = str(message_data.get("from", {}).get("id", ""))
+        
+        # Wenn keine Message, ignorieren
+        if not chat_id or not user_message:
+            return {"status": "ignored"}
+        
+        print(f"\n{'='*50}")
+        print(f"📱 Telegram Message from {user_name}")
+        print(f"{'='*50}")
+        
+        # Intent Detection
+        intent = detect_intent(user_message)
+        print(f"🎯 Intent: {intent}")
+        
+        # Handler aufrufen
+        if intent == "CHAT":
+            response_text = handle_chat(
+                message=user_message,
+                user_name=user_name
+            )
+            handler = "Chat"
+            
+        elif intent == "CRM":
+            response_text = handle_crm(
+                message=user_message,
+                user_name=user_name,
+                user_id=user_id
+            )
+            handler = "CRM"
+            
+        else:
+            response_text = "Entschuldigung, ich konnte deine Anfrage nicht verarbeiten."
+            handler = "Unknown"
+        
+        print(f"✅ Response from {handler}: {response_text[:100]}...")
+        
+        # ANTWORT AN TELEGRAM SENDEN
+        telegram_api_url = f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage"
+        
+        telegram_response = requests.post(
+            telegram_api_url,
+            json={
+                "chat_id": chat_id,
+                "text": response_text
+            }
+        )
+        
+        if telegram_response.status_code == 200:
+            print("✅ Message sent to Telegram!")
+        else:
+            print(f"❌ Telegram API Error: {telegram_response.text}")
+        
+        print(f"{'='*50}\n")
+        
+        return {"status": "success"}
+        
+    except Exception as e:
+        print(f"❌ Telegram Webhook Error: {e}")
+        return {"status": "error", "message": str(e)}
 
 
 @app.post("/adizon")
@@ -167,3 +234,8 @@ def adizon_test(message: str, user_name: str = "Test User"):
             "status": "error",
             "message": str(e)
         }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
