@@ -1,0 +1,17 @@
+# Web Framework
+fastapi==0.115.5
+uvicorn==0.32.1
+
+# AI & LangChain
+openai>=1.58.1,<2.0.0
+langchain==0.3.13
+langchain-openai==0.2.14
+
+# HTTP Requests
+requests==2.32.3
+
+# Environment Variables
+python-dotenv==1.0.1
+
+# Pydantic
+pydantic==2.10.4
