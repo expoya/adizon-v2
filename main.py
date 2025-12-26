@@ -56,25 +56,35 @@ def detect_intent(message: str) -> str:
             messages=[
                 {
                     "role": "system",
-                    "content": """Du bist ein Intent Classifier. Antworte NUR mit: CHAT oder CRM
+                    "content": """Du bist ein Intent Classifier.
 
-CRM: erstelle, zeige, suche Kontakt/Lead/Deal
-CHAT: hallo, wie geht's, smalltalk
+Klassifiziere die User-Nachricht in eine dieser Kategorien:
+- CHAT: Smalltalk, Begrüßungen, allgemeine Fragen
+- CRM: Kontakte/Leads/Deals verwalten, CRM-Aktionen
 
-Antworte NUR: CHAT oder CRM"""
+Antworte am Ende mit genau einem Wort: CHAT oder CRM"""
                 },
-                {"role": "user", "content": message}
+                {"role": "user", "content": "/no_think\n\n" + message}
             ],
-            temperature=0.0,
-            max_tokens=5
+            temperature=0.3,  # Nicht 0.0!
+            max_tokens=50    # Genug für Reasoning + Antwort!
         )
         
         print(f"✅ API Call successful")
         
-        intent = response.choices[0].message.content.strip().upper()
+        # Content UND Reasoning auslesen
+        content = response.choices[0].message.content or ""
         
-        print(f"🎯 Raw Intent: '{intent}'")
+        # Reasoning anschauen (optional, für Debug)
+        if hasattr(response.choices[0].message, 'reasoning'):
+            reasoning = response.choices[0].message.reasoning
+            print(f"💭 Reasoning: {reasoning[:100]}...")
+        
+        print(f"🎯 Raw Intent: '{content}'")
         print(f"🔍 === INTENT DETECTION END ===\n")
+        
+        # Intent extrahieren (letztes Wort oder ganze Antwort)
+        intent = content.strip().upper()
         
         if "CRM" in intent:
             return "CRM"

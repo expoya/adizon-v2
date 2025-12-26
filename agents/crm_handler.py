@@ -1,15 +1,17 @@
 """
-Adizon - CRM Handler
-Spezialist für: Kontakte, Leads, Deals, CRM-Operationen
+Adizon - CRM Handler mit LangChain Tools
 """
 
-from openai import OpenAI
+from langchain_openai import ChatOpenAI
+from langchain.agents import create_tool_calling_agent, AgentExecutor
+from langchain.prompts import ChatPromptTemplate
+from tools.crm import create_contact, search_contacts
 import os
 
 
 def handle_crm(message: str, user_name: str, user_id: str) -> str:
     """
-    Adizon's CRM-Funktion
+    Adizon's CRM-Funktion mit Tool Calling
     
     Args:
         message: User Nachricht
@@ -21,46 +23,60 @@ def handle_crm(message: str, user_name: str, user_id: str) -> str:
     """
     
     try:
-        client = OpenAI(
+        print(f"🏢 Adizon (CRM) processing: {message[:50]}...")
+        
+        # LLM initialisieren
+        llm = ChatOpenAI(
             base_url=os.getenv("OPENROUTER_BASE_URL"),
-            api_key=os.getenv("OPENROUTER_API_KEY")
+            api_key=os.getenv("OPENROUTER_API_KEY"),
+            model=os.getenv("MODEL_NAME"),
+            temperature=0.3
         )
         
-        system_prompt = f"""Du bist Adizon, ein KI-Assistent für KMUs.
+        # Tools Liste
+        tools = [create_contact, search_contacts]
+        
+        # Prompt Template
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", f"""Du bist Adizon, ein KI-Assistent für KMUs.
 
 CRM-MODUS:
-- Professionell und strukturiert
+- Du kannst CRM-Tools nutzen um echte Aktionen auszuführen
+- Sei professionell und präzise
 - Antworte auf Deutsch
 - Du duzt ({user_name})
 
-WICHTIG - DUMMY PHASE:
-Du hast noch KEINE echten CRM-Tools!
-Antworte dass du verstehst was gewünscht wird, aber die Funktion noch in Entwicklung ist.
+VERFÜGBARE TOOLS:
+- create_contact: Erstellt Kontakte (benötigt: name, email, optional: phone)
+- search_contacts: Sucht Kontakte (benötigt: query)
 
-Beispiel: "Alles klar! Du möchtest [AKTION]. 
-Diese Funktion baue ich gerade auf. Bald kann ich das direkt für dich erledigen! 🔧"
+WICHTIG:
+- Wenn du Informationen brauchst (z.B. Email fehlt), frage nach!
+- Nach Tool-Nutzung: Bestätige die Aktion kurz und freundlich
+- Bei Fehlern: Erkläre was schief ging
 
-User ID: {user_id}"""
-
-        print(f"🏢 Adizon (CRM) processing: {message[:50]}...")
+User ID: {user_id}"""),
+            ("human", "{input}"),
+            ("placeholder", "{agent_scratchpad}")
+        ])
         
-        response = client.chat.completions.create(
-            model=os.getenv("MODEL_NAME"),
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": message}
-            ],
-            temperature=0.3,
-            max_tokens=250
+        # Agent erstellen
+        agent = create_tool_calling_agent(llm, tools, prompt)
+        agent_executor = AgentExecutor(
+            agent=agent,
+            tools=tools,
+            verbose=True,  # Zeigt Tool-Calls in Logs
+            max_iterations=3,
+            handle_parsing_errors=True
         )
         
-        ai_response = response.choices[0].message.content
+        # Agent ausführen
+        response = agent_executor.invoke({"input": message})
         
-        if not ai_response:
-            return f"Hi {user_name}, ich hatte gerade technische Probleme. Versuch's bitte nochmal!"
-        
-        return ai_response.strip()
+        return response['output']
         
     except Exception as e:
         print(f"❌ CRM Handler Error: {e}")
-        return f"Hi {user_name}, ich hatte gerade technische Probleme im crm handler. Versuch's bitte nochmal!"
+        import traceback
+        print(traceback.format_exc())
+        return f"Hi {user_name}, ich hatte gerade technische Probleme. Versuch's bitte nochmal!"
