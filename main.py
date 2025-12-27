@@ -1,18 +1,18 @@
 """
 Adizon V2 - AI Assistant für KMUs
 """
+# Environment Variables laden
+from dotenv import load_dotenv
+load_dotenv()
 
 from fastapi import FastAPI
 from pydantic import BaseModel
 from openai import OpenAI
 import os
-from dotenv import load_dotenv
 from agents.chat_handler import handle_chat
+from utils.memory import get_session_state, clear_user_session
 from agents.crm_handler import handle_crm
 import requests
-
-# Environment Variables laden
-load_dotenv()
 
 # FastAPI App
 app = FastAPI(
@@ -64,21 +64,16 @@ Klassifiziere die User-Nachricht in eine dieser Kategorien:
 
 Antworte am Ende mit genau einem Wort: CHAT oder CRM"""
                 },
-                {"role": "user", "content": "/no_think\n\n" + message}
+                {"role": "user", "content": message}
             ],
-            temperature=0.3,  # Nicht 0.0!
-            max_tokens=50    # Genug für Reasoning + Antwort!
+            temperature=0.0,  
+            max_tokens=5    
         )
         
         print(f"✅ API Call successful")
         
-        # Content UND Reasoning auslesen
+        # Content auslesen
         content = response.choices[0].message.content or ""
-        
-        # Reasoning anschauen (optional, für Debug)
-        if hasattr(response.choices[0].message, 'reasoning'):
-            reasoning = response.choices[0].message.reasoning
-            print(f"💭 Reasoning: {reasoning[:100]}...")
         
         print(f"🎯 Raw Intent: '{content}'")
         print(f"🔍 === INTENT DETECTION END ===\n")
@@ -140,35 +135,35 @@ def telegram_webhook(request: dict):
             return {"status": "ignored"}
         
         print(f"\n{'='*50}")
-        print(f"📱 Telegram Message from {user_name}")
-        print(f"{'='*50}")
+        print(f"📱 Telegram Message from {user_name}: {user_message}")
+
+        # 1. KILL SWITCH CHECK
+        if user_message.strip().upper() in ["NEUSTART", "/RESET", "RESET"]:
+            clear_user_session(user_id)
+            response_text = "Alles klar! Mein Gedächtnis ist gelöscht. Womit fangen wir neu an? 🧠✨"
+            requests.post(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage", 
+                          json={"chat_id": chat_id, "text": response_text})
+            return {"status": "reset"}
+
+        # 2. STATE CHECK (Sticky Session)
+        current_state = get_session_state(user_id)
+        print(f"🧠 Current Session State: {current_state}")
+
+        if current_state == "ACTIVE":
+            print("⏩ Skipping Router (State is ACTIVE) -> Direct to CRM")
+            response_text = handle_crm(user_message, user_name, user_id)
         
-        # Intent Detection
-        intent = detect_intent(user_message)
-        print(f"🎯 Intent: {intent}")
-        
-        # Handler aufrufen
-        if intent == "CHAT":
-            response_text = handle_chat(
-                message=user_message,
-                user_name=user_name
-            )
-            handler = "Chat"
-            
-        elif intent == "CRM":
-            response_text = handle_crm(
-                message=user_message,
-                user_name=user_name,
-                user_id=user_id
-            )
-            handler = "CRM"
-            
         else:
-            response_text = "Entschuldigung, ich konnte deine Anfrage nicht verarbeiten."
-            handler = "Unknown"
-        
-        print(f"✅ Response from {handler}: {response_text[:100]}...")
-        
+            # 3. NORMAL ROUTING (State is IDLE)
+            intent = detect_intent(user_message)
+            
+            if intent == "CHAT":
+                response_text = handle_chat(user_message, user_name)
+            elif intent == "CRM":
+                response_text = handle_crm(user_message, user_name, user_id)
+            else:
+                response_text = "Error."
+    
         # ANTWORT AN TELEGRAM SENDEN
         telegram_api_url = f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage"
         
@@ -186,7 +181,6 @@ def telegram_webhook(request: dict):
             print(f"❌ Telegram API Error: {telegram_response.text}")
         
         print(f"{'='*50}\n")
-        
         return {"status": "success"}
         
     except Exception as e:
@@ -197,53 +191,41 @@ def telegram_webhook(request: dict):
 @app.post("/adizon")
 def adizon_test(message: str, user_name: str = "Test User"):
     """
-    Kompletter Adizon Flow - Lokal testen
+    Kompletter Adizon Flow Lokal
     """
     print(f"\n{'='*50}")
     print(f"📥 New Message from {user_name}")
-    print(f"{'='*50}")
     
-    try:
-        # Schritt 1: Intent Detection
+    user_id = "local_dev_user_1"
+
+    # Kill Switch Check
+    if message.strip().upper() == "NEUSTART":
+        clear_user_session(user_id)
+        return {"response": "Session Reset executed."}
+
+    # State Check
+    current_state = get_session_state(user_id)
+    print(f"🧠 State: {current_state}")
+    
+    if current_state == "ACTIVE":
+        response_text = handle_crm(message, user_name, user_id)
+        handler = "CRM (Sticky)"
+    else:
         intent = detect_intent(message)
-        print(f"🎯 Intent: {intent}")
-        
-        # Schritt 2: Handler aufrufen
         if intent == "CHAT":
-            response_text = handle_chat(
-                message=message,
-                user_name=user_name
-            )
+            response_text = handle_chat(message, user_name)
             handler = "Chat"
-            
-        elif intent == "CRM":
-            response_text = handle_crm(
-                message=message,
-                user_name=user_name,
-                user_id="test_123"
-            )
+        else:
+            response_text = handle_crm(message, user_name, user_id)
             handler = "CRM"
             
-        else:
-            response_text = "Entschuldigung, ich konnte deine Anfrage nicht verarbeiten."
-            handler = "Unknown"
-        
-        print(f"✅ Response from {handler}: {response_text[:100]}...")
-        print(f"{'='*50}\n")
-        
-        return {
-            "status": "success",
-            "intent": intent,
-            "handler": handler,
-            "response": response_text
-        }
-        
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+    print(f"✅ Response ({handler}): {response_text[:100]}...")
+    return {
+        "status": "success",
+        "handler": handler,
+        "response": response_text,
+        "new_state": get_session_state(user_id)
+    } 
 
 
 if __name__ == "__main__":

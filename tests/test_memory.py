@@ -1,28 +1,38 @@
 """
 Test Redis Memory 
 """
-
-from utils.memory import get_conversation_memory
 import os
 from dotenv import load_dotenv
+import sys
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.memory import get_conversation_memory
 load_dotenv()
 
 print("=== REDIS MEMORY TEST ===\n")
 
 # Test User ID
-user_id = "test_123"
+user_id = "test_new_user1"
 
 print("1. Memory holen...")
-memory = get_conversation_memory(user_id, "test_session")
-print(f"✅ Memory created: {memory}\n")
+try:
+    memory = get_conversation_memory(user_id, "test_session")
+    print(f"✅ Memory created: {memory}\n")
+except Exception as e:
+    print(f"❌ Fehler beim Erstellen des Memory: {e}")
+    sys.exit(1)
 
-print("2. Conversation speichern...")
-memory.save_context(
-    {"input": "Hallo! Ich bin Michael"},
-    {"output": "Hey Michael! Schön dich kennenzulernen!"}
-)
-print("✅ Saved to Redis\n")
+try:
+    memory.save_context(
+        {"input": "Hallo! Ich bin Michael"},
+        {"output": "Hey Michael! Schön dich kennenzulernen!"}
+    )
+    print("✅ Saved to Redis\n")
+except Exception as e:
+    print(f"❌ Fehler beim Speichern in Redis: {e}")
+    print("   Ist Docker gestartet? (docker ps)")
+    sys.exit(1)
 
 print("3. Memory nochmal holen (sollte History haben)...")
 memory2 = get_conversation_memory(user_id, "test_session")

@@ -25,14 +25,13 @@ def handle_chat(message: str, user_name: str) -> str:
             api_key=os.getenv("OPENROUTER_API_KEY")
         )
         
-        system_prompt = f"""Du bist Adizon, ein KI-Assistent für KMUs.
+        system_prompt = f"""Du bist Adizon, ein freundlicher, hilfreicher Assistent für Sales.
 
 CHAT-MODUS:
-- Sei freundlich und hilfsbereit
 - Antworte auf Deutsch
 - Du duzt ({user_name})
 - Halte Antworten kurz (2-4 Sätze)
-- Smalltalk, keine CRM-Aktionen
+- Biete dem User an deine Fähigkeiten zu nutzen: CRM-Aufgaben, Sales-Coaching, den letzten Kundentermin evaluieren, auf den nächsten Termin vorbereiten, Einwandbehandlung üben etc.
 
 Du führst gerade einen lockeren Chat."""
 
@@ -44,7 +43,8 @@ Du führst gerade einen lockeren Chat."""
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": message}
             ],
-            temperature=0.8,
+            top_p=0.9,
+            temperature=0.6,
             max_tokens=200
         )
         
@@ -58,4 +58,3 @@ Du führst gerade einen lockeren Chat."""
     except Exception as e:
         print(f"❌ Chat Handler Error: {e}")
         return f"Hey {user_name}! Entschuldige, mein chat_handler hat einen Fehler. Versuch's nochmal?"
-        
