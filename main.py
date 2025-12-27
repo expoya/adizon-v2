@@ -56,13 +56,24 @@ def detect_intent(message: str) -> str:
             messages=[
                 {
                     "role": "system",
-                    "content": """Du bist ein Intent Classifier.
+                    "content": """Du bist ein strikter Intent Classifier für eine Business-Software.
 
-Klassifiziere die User-Nachricht in eine dieser Kategorien:
-- CHAT: Smalltalk, Begrüßungen, allgemeine Fragen
-- CRM: Kontakte/Leads/Deals verwalten, CRM-Aktionen
+ENTSCHEIDUNGS-REGELN:
 
-Antworte am Ende mit genau einem Wort: CHAT oder CRM"""
+KATEGORIE 'CRM' (Business Logic):
+1.  Jede Erwähnung von "CRM", "Datenbank", "System", "Speichern", "Suchen".
+2.  Jede Frage nach EXISTENZ ("Haben wir...", "Kennst du...", "Gibt es...").
+3.  Jede Nennung von NAMEN (Personen, Firmen) oder E-MAILS.
+4.  Befehle: "Erstelle", "Suche", "Verkaufe", "Notiz".
+
+KATEGORIE 'CHAT' (Smalltalk):
+1.  NUR reine Begrüßungen ("Hallo", "Moin").
+2.  NUR Fragen zum Befinden ("Wie gehts", "Alles fit").
+3.  NUR philosophische Fragen ("Wer bist du", "Was kannst du").
+
+WICHTIG: Im Zweifel IMMER 'CRM' wählen, damit der Agent in der Datenbank nachsehen kann!
+
+Antworte NUR mit einem Wort: CHAT oder CRM"""
                 },
                 {"role": "user", "content": message}
             ],
