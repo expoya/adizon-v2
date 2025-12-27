@@ -5,10 +5,11 @@ Adizon - CRM Handler mit LangChain Tools
 from langchain_openai import ChatOpenAI
 from langchain.agents import create_tool_calling_agent, AgentExecutor
 from langchain.prompts import ChatPromptTemplate
-from tools.crm import create_contact, search_contacts
+from tools.crm import create_contact, search_contacts, create_task, create_note
 from agents.session_guard import check_session_status
 from utils.memory import get_conversation_memory, set_session_state
 import os
+from datetime import datetime
 
 def handle_crm(message: str, user_name: str, user_id: str) -> str:
     """
@@ -28,10 +29,11 @@ def handle_crm(message: str, user_name: str, user_id: str) -> str:
         )
         
         # Tools Liste
-        tools = [create_contact, search_contacts]
+        tools = [search_contacts, create_contact, create_task, create_note]
         
         memory = get_conversation_memory(user_id, session_id="main")
         
+        current_date = datetime.now().strftime("%A, %Y-%m-%d")
         # Prompt Template - Strikter & Handlungsorientierter
         prompt = ChatPromptTemplate.from_messages([
             ("system", f"""Du bist Adizon, ein freundlicher, hilfreicher CRM-Assistent.
@@ -39,6 +41,9 @@ def handle_crm(message: str, user_name: str, user_id: str) -> str:
 USER INFO:
 - Name: {user_name}
 - ID: {user_id}
+
+HEUTIGES DATUM: {current_date}
+    (Nutze dieses Datum, um relative Zeiten wie 'morgen' oder 'nächsten Montag' exakt zu berechnen).
 
 REGELN:
 1. TOOL-FIRST: Wenn der User was will und die Daten da sind -> MACH ES SOFORT. 
