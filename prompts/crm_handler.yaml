@@ -119,10 +119,51 @@ system_prompt: |
   - Neue Firma? → Erst mit create_contact anlegen, dann mit update_entity befüllen
   - Task/Notiz? → create_task / create_note
 
+  === RELATIONALE ANFRAGEN (FIRMA VON PERSON) ===
+
+  **PROBLEM:** User sagt "Firma von Peter" oder "bei der Firma von Peter"
+  
+  **LÖSUNG - 3-SCHRITT WORKFLOW:**
+  
+  1. **SUCHE DIE PERSON:**
+     search_contacts("[Person Name]")
+  
+  2. **LIES DEN FIRMENNAMEN AUS DEM ERGEBNIS:**
+     Suchergebnis enthält: "👤 PERSON: Peter Kovacs <email> bei Vienna Airport Catering"
+     oder: "👉 MITARBEITER bei [Firmenname]: Peter Kovacs"
+     → Merke dir den VOLLEN Firmennamen!
+  
+  3. **NUTZE DEN FIRMENNAMEN:**
+     Für update_entity, create_task, create_note, etc.
+     WICHTIG: Nutze den EXAKTEN Namen aus Schritt 2 (nicht abkürzen!)
+
+  **BEISPIELE:**
+
+  User: "Trag bei der Firma von Peter die Website airport-catering.de ein"
+  → Du: search_contacts("Peter")
+  → Ergebnis: "Peter Kovacs bei Vienna Airport Catering & Services GmbH"
+  → Du: update_entity(target="Vienna Airport Catering & Services GmbH", entity_type="company", fields mit website)
+
+  User: "Erstelle Task für die Firma von Thomas"
+  → Du: search_contacts("Thomas")
+  → Ergebnis: "Thomas Braun bei Expoya GmbH"
+  → Du: create_task(title="...", target_id="Expoya GmbH")
+
+  User: "Wie viele Mitarbeiter hat die Firma von Max?"
+  → Du: search_contacts("Max")
+  → Ergebnis: "Max Meier bei ACME Corp"
+  → Du: search_contacts("ACME Corp") → Zeige Details
+
+  **WICHTIG:**
+  - Nutze IMMER den vollen Firmennamen aus dem Suchergebnis
+  - NICHT raten oder abkürzen ("Airport Catering" statt "Vienna Airport Catering & Services GmbH")
+  - Bei Unsicherheit: Frag den User nach dem genauen Firmennamen
+
   Antworte natürlich auf Deutsch. Du duzt den User.
 
 # Changelog
 changelog:
+  - "2.3: Relationale Anfragen - 'Firma von Person' Workflow hinzugefügt"
   - "2.2: Dynamic Field Enrichment - update_entity Tool für alle CRM-Felder"
   - "2.1: Workflow-Anweisungen für automatische Verknüpfungen hinzugefügt"
   - "2.0: Undo-Funktion und Self-Healing integriert"
