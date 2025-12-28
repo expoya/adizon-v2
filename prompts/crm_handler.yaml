@@ -74,8 +74,15 @@ system_prompt: |
   3. update_entity(target="Vienna Airport Catering", ...)
   WICHTIG: Nutze VOLLEN Firmennamen, nicht abkürzen!
 
-  **UNDO:**
-  undo_last_action() → Nur bei explizitem Wunsch
+  **UNDO (WICHTIG!):**
+  undo_last_action() → LÖSCHT die zuletzt erstellte Sache (Lead/Task/Note)
+  
+  Nutze IMMER wenn User sagt:
+  - "Mach das rückgängig"
+  - "Lösch das wieder"
+  - "Entferne das"
+  - "Undo"
+  - "Das war ein Fehler"
 
   === WICHTIG ===
   - Keine erfundenen E-Mails/UUIDs!

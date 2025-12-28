@@ -38,6 +38,7 @@ create_task_func = mock_task
 create_note_func = mock_note
 update_entity_func = None  # Nur im Live-Modus verfügbar
 
+# === ADAPTER SELECTION ===
 if crm_system == "TWENTY":
     from .twenty_adapter import TwentyCRM
     try:
@@ -46,10 +47,26 @@ if crm_system == "TWENTY":
         create_contact_func = adapter.create_contact
         create_task_func = adapter.create_task
         create_note_func = adapter.create_note
-        update_entity_func = adapter.update_entity  # Neues Tool
+        update_entity_func = adapter.update_entity
         print("✅ Twenty Adapter connected")
     except Exception as e:
-        print(f"❌ Adapter Error: {e}")
+        print(f"❌ Twenty Adapter Error: {e}")
+
+elif crm_system == "ZOHO":
+    from .zoho_adapter import ZohoCRM
+    try:
+        adapter = ZohoCRM()
+        search_func = adapter.search_leads  # Zoho nutzt Leads statt contacts
+        create_contact_func = adapter.create_contact
+        create_task_func = adapter.create_task
+        create_note_func = adapter.create_note
+        update_entity_func = adapter.update_entity
+        print("✅ Zoho Adapter connected")
+    except Exception as e:
+        print(f"❌ Zoho Adapter Error: {e}")
+
+else:
+    print(f"⚠️ CRM_SYSTEM={crm_system} - Using Mock Mode (set to TWENTY or ZOHO for live mode)")
 
 # === DIE FACTORY (Das Profi-Teil) ===
 
@@ -59,16 +76,44 @@ def get_crm_tools_for_user(user_id: str) -> list:
     Damit landen Undo-Infos im richtigen Redis-Key.
     """
     
-    # 1. Helper zum ID lesen
+    # 1. Helper zum ID lesen (unterstützt UUID und numerische IDs)
     def _extract_id(text):
+        # Versuche UUID Format (Twenty: abc-123-def-456)
         match = re.search(r"\(ID:\s*([a-f0-9\-]+)\)", text)
-        return match.group(1) if match else None
+        if match:
+            return match.group(1)
+        
+        # Versuche numerische ID (Zoho: 1234567890123456)
+        match = re.search(r"\(ID:\s*(\d+)\)", text)
+        if match:
+            return match.group(1)
+        
+        return None
 
     # 2. Die Wrapper (Closures)
-    def create_contact_wrapper(name: str, email: str, phone: Optional[str] = None) -> str:
-        """Erstellt Kontakt."""
-        res = create_contact_func(name, email, phone)
-        if pid := _extract_id(res): save_undo_context(user_id, "person", pid)
+    def create_contact_wrapper(first_name: str, last_name: str, company: str, email: str, phone: Optional[str] = None) -> str:
+        """
+        Erstellt neuen Kontakt/Lead im CRM.
+        
+        PFLICHTFELDER (Agent muss ALLE abfragen):
+        - first_name: Vorname des Kontakts
+        - last_name: Nachname des Kontakts
+        - company: Firmenname (wenn unbekannt: "Unbekannt" oder "-")
+        - email: E-Mail Adresse
+        
+        OPTIONAL:
+        - phone: Telefonnummer
+        
+        WICHTIG: Frage den User IMMER nach allen Pflichtfeldern, bevor du dieses Tool nutzt!
+        
+        Beispiel:
+        User: "Erstelle Lead für Max"
+        Agent: "Gerne! Ich brauche noch: Nachname, Firma und E-Mail von Max."
+        """
+        res = create_contact_func(first_name, last_name, company, email, phone)
+        # Bei Zoho: "lead", bei Twenty: "person"
+        entity_type = "lead" if crm_system == "ZOHO" else "person"
+        if pid := _extract_id(res): save_undo_context(user_id, entity_type, pid)
         return res
 
     def create_task_wrapper(title: str, body: str = "", due_date: Optional[str] = None, target_id: Optional[str] = None) -> str:
@@ -108,31 +153,28 @@ def get_crm_tools_for_user(user_id: str) -> list:
     
     def update_entity_wrapper(target: str, entity_type: str, fields: str) -> str:
         """
-        Aktualisiert Felder eines CRM-Eintrags (Person oder Company).
+        Aktualisiert Felder eines CRM-Eintrags.
         
         Args:
-            target: Name, Email oder UUID des Eintrags
-            entity_type: "person" oder "company"
+            target: Name, Email oder ID des Eintrags
+            entity_type: "person"/"company" (Twenty) oder "lead" (Zoho)
             fields: JSON string mit Feldern, z.B. '{"website": "expoya.com", "size": 50}'
             
-        Verfügbare Felder:
+        Verfügbare Felder (Twenty):
+            Person: job, linkedin, city, birthday
+            Company: website, size, industry, address, roof_area
         
-        Person:
-            - job: Position/Job Title (z.B. "CEO", "Head of Sales")
-            - linkedin: LinkedIn Profil URL (muss linkedin.com enthalten)
-            - city: Wohnort/Stadt
-            - birthday: Geburtstag (Format: YYYY-MM-DD)
+        Verfügbare Felder (Zoho):
+            Lead: email, phone, mobile, job, linkedin, company, website, size, 
+                  industry, revenue, street, city, state, zip, country, 
+                  lead_source, notes, roof_area
         
-        Company:
-            - website: Firmen-Website (https:// wird automatisch ergänzt)
-            - size: Anzahl Mitarbeiter (Zahl)
-            - industry: Branche (z.B. "Solar", "IT")
-            - address: Vollständige Firmenadresse
-            - roof_area: [CUSTOM] Dachfläche in m² (nur für Voltage Solutions)
-        
-        Beispiele:
+        Beispiele (Twenty):
             update_entity("Thomas Braun", "person", '{{"job": "CEO", "linkedin": "linkedin.com/in/thomas"}}')
-            update_entity("Expoya", "company", '{{"website": "expoya.com", "size": 50, "industry": "Solar"}}')
+            update_entity("Expoya", "company", '{{"website": "expoya.com", "size": 50}}')
+        
+        Beispiele (Zoho):
+            update_entity("Max Mustermann", "lead", '{{"job": "CEO", "company": "Expoya", "website": "expoya.com"}}')
         """
         if not update_entity_func:
             return "❌ Update-Feature nicht verfügbar (nur im Live-Modus mit CRM-Adapter)."
@@ -149,10 +191,14 @@ def get_crm_tools_for_user(user_id: str) -> list:
     # 3. Liste zurückgeben
     tools = [
         StructuredTool.from_function(search_func, name="search_contacts", description="Sucht Kontakte und Firmen im CRM"),
-        StructuredTool.from_function(create_contact_wrapper, name="create_contact", description="Erstellt neuen Kontakt"),
+        StructuredTool.from_function(
+            create_contact_wrapper, 
+            name="create_contact", 
+            description="Erstellt neuen Kontakt/Lead. WICHTIG: Frage IMMER nach first_name, last_name, company und email, bevor du dieses Tool nutzt! Nur phone ist optional."
+        ),
         StructuredTool.from_function(create_task_wrapper, name="create_task", description="Erstellt Task (Datum im ISO-Format)"),
         StructuredTool.from_function(create_note_wrapper, name="create_note", description="Erstellt Notiz"),
-        StructuredTool.from_function(undo_wrapper, name="undo_last_action", description="Macht die letzte Erstellung RÜCKGÄNGIG")
+        StructuredTool.from_function(undo_wrapper, name="undo_last_action", description="Löscht den zuletzt erstellten Eintrag (Lead/Task/Note). Nutze wenn User sagt: 'rückgängig', 'lösch das', 'undo'")
     ]
     
     # Update-Tool nur hinzufügen, wenn verfügbar

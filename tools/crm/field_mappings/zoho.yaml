@@ -1,0 +1,249 @@
+# Zoho CRM Field Mapping
+# Definiert, welche Felder Adizon befüllen darf (Whitelist-Prinzip)
+
+crm_system: "zoho"
+version: "1.0"
+description: "Field Mapping für Zoho CRM - Leads Modul"
+last_updated: "2025-12-28"
+
+# === WHITELIST: Welche Felder darf Adizon befüllen? ===
+
+entities:
+  lead:
+    description: "Leads (Kombination aus Person + Firma in einem Objekt)"
+    endpoint: "Leads"
+    fields:
+      # === PERSON FIELDS ===
+      
+      email:
+        crm_field: "Email"
+        type: "string"
+        description: "E-Mail Adresse"
+        required: false
+        example: "max@example.com"
+        llm_hint: "E-Mail Adresse des Leads"
+      
+      phone:
+        crm_field: "Phone"
+        type: "string"
+        description: "Telefonnummer (Büro)"
+        required: false
+        example: "+43 650 1234567"
+        llm_hint: "Telefonnummer (internationale Vorwahl empfohlen)"
+      
+      mobile:
+        crm_field: "Mobile"
+        type: "string"
+        description: "Mobilnummer"
+        required: false
+        example: "+43 650 1234567"
+        llm_hint: "Mobiltelefonnummer"
+      
+      job:
+        crm_field: "Designation"
+        type: "string"
+        description: "Position/Job Title"
+        required: false
+        example: "Head of Sales"
+        llm_hint: "z.B. 'CEO', 'Vertriebsleiter', 'Head of Marketing'"
+      
+      linkedin:
+        crm_field: "LinkedIn"
+        type: "url"
+        description: "LinkedIn Profil URL"
+        required: false
+        auto_fix: true
+        validation: "linkedin.com"
+        example: "https://linkedin.com/in/max-mustermann"
+        llm_hint: "LinkedIn Profil-URL (muss linkedin.com enthalten)"
+      
+      # === COMPANY FIELDS ===
+      # Bei Zoho ist die Firma Teil des Lead-Objekts (nicht separat)
+      
+      company:
+        crm_field: "Company"
+        type: "string"
+        description: "Firmenname"
+        required: false
+        example: "Expoya GmbH"
+        llm_hint: "Name der Firma/Organisation des Leads"
+      
+      website:
+        crm_field: "Website"
+        type: "url"
+        description: "Firmen-Website"
+        required: false
+        auto_fix: true
+        example: "expoya.com"
+        llm_hint: "URL der Firmen-Website (z.B. 'expoya.com' oder 'https://expoya.com')"
+      
+      size:
+        crm_field: "No_of_Employees"
+        type: "number"
+        description: "Anzahl Mitarbeiter"
+        required: false
+        min: 1
+        example: 50
+        llm_hint: "Anzahl der Mitarbeiter als Zahl"
+      
+      industry:
+        crm_field: "Industry"
+        type: "string"
+        description: "Branche"
+        required: false
+        example: "Solar"
+        llm_hint: "z.B. 'Solar', 'IT', 'Maschinenbau', 'Consulting'"
+      
+      revenue:
+        crm_field: "Annual_Revenue"
+        type: "number"
+        description: "Jahresumsatz"
+        required: false
+        min: 0
+        example: 1000000
+        llm_hint: "Jahresumsatz in Euro/Dollar (nur Zahl)"
+      
+      # === ADDRESS FIELDS ===
+      
+      street:
+        crm_field: "Street"
+        type: "string"
+        description: "Straße und Hausnummer"
+        required: false
+        example: "Hauptstraße 1"
+        llm_hint: "Straßenname mit Hausnummer"
+      
+      city:
+        crm_field: "City"
+        type: "string"
+        description: "Stadt"
+        required: false
+        example: "Wien"
+        llm_hint: "Stadtname"
+      
+      state:
+        crm_field: "State"
+        type: "string"
+        description: "Bundesland/Staat"
+        required: false
+        example: "Wien"
+        llm_hint: "Bundesland oder Staat"
+      
+      zip:
+        crm_field: "Zip_Code"
+        type: "string"
+        description: "Postleitzahl"
+        required: false
+        example: "1010"
+        llm_hint: "Postleitzahl (PLZ)"
+      
+      country:
+        crm_field: "Country"
+        type: "string"
+        description: "Land"
+        required: false
+        example: "Österreich"
+        llm_hint: "Ländername"
+      
+      # === LEAD MANAGEMENT ===
+      
+      lead_source:
+        crm_field: "Lead_Source"
+        type: "string"
+        description: "Lead-Quelle"
+        required: false
+        example: "Website"
+        llm_hint: "z.B. 'Website', 'Messe', 'Empfehlung', 'LinkedIn'"
+      
+      # === NOTES/DESCRIPTION ===
+      
+      notes:
+        crm_field: "Description"
+        type: "string"
+        description: "Notizen/Beschreibung zum Lead"
+        required: false
+        example: "Interessiert an Solarlösungen für Dachfläche"
+        llm_hint: "Freitext-Notizen zum Lead"
+      
+      # === CUSTOM FIELD BEISPIEL ===
+      # Voltage Solutions: Solaranlagen-Verkauf
+      roof_area:
+        crm_field: "Roof_Area"
+        type: "number"
+        unit: "m²"
+        description: "Verfügbare Dachfläche für Solaranlagen"
+        required: false
+        custom: true
+        customer: "voltage_solutions"
+        example: 150
+        llm_hint: "Dachfläche in Quadratmetern (nur Zahl, ohne Einheit)"
+
+# === VALIDATION RULES ===
+validation:
+  url:
+    pattern: "^https?://"
+    auto_fix: true
+    fix_action: "Ergänzt https:// wenn fehlt"
+  
+  linkedin:
+    pattern: "linkedin.com"
+    message: "Muss eine LinkedIn URL sein (linkedin.com)"
+  
+  email:
+    pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+    message: "Ungültiges Email-Format"
+  
+  number:
+    type: "integer"
+    message: "Muss eine ganze Zahl sein"
+
+# === ZOHO-SPEZIFISCHE KONFIGURATION ===
+zoho:
+  module: "Leads"
+  api_version: "v8"
+  region: "eu"  # eu, com, in, au, jp
+  
+  # Standard Lead Status
+  default_lead_status: "Not Contacted"
+  
+  # Standard Lead Source (wenn nicht angegeben)
+  default_lead_source: "AI Assistant"
+  
+  # Pflichtfelder bei Zoho Leads
+  required_fields:
+    - "Last_Name"  # Mindestens Nachname ist Pflicht
+  
+  # Rate Limits (Calls pro Minute)
+  rate_limit: 100
+
+# === MAPPING NOTES ===
+notes: |
+  WICHTIG: Zoho Leads unterscheidet sich von Twenty!
+  
+  - Bei Zoho ist ALLES in einem "Lead" (Person + Firma kombiniert)
+  - Pflichtfeld: Mindestens "Last_Name" muss gefüllt sein
+  - Field Names sind PascalCase mit Underscores (z.B. "First_Name")
+  - Einfache Strings (keine nested Objects wie bei Twenty)
+  - Company ist ein String-Feld im Lead (nicht separates Entity)
+  
+  Address-Felder (optional):
+  - Können einzeln gefüllt werden (street, city, zip, country)
+  - Zoho kombiniert sie automatisch in der UI
+  
+  Custom Fields:
+  - Müssen in Zoho CRM angelegt sein
+  - API Name ohne Prefix verwenden (z.B. "Roof_Area", nicht "cf_Roof_Area")
+
+# === UNTERSCHIEDE ZU TWENTY ===
+differences_to_twenty: |
+  | Aspekt | Twenty CRM | Zoho CRM |
+  |--------|-----------|----------|
+  | Entity-Struktur | person + company (getrennt) | lead (kombiniert) |
+  | Field Format | camelCase + Objects | PascalCase_With_Underscores |
+  | Email | emails Object | String |
+  | Phone | phones Object | String |
+  | Company | Separates Entity | Feld im Lead |
+  | Pflichtfelder | firstName | Last_Name |
+  | Address | address String | street, city, state, zip, country |
+
+

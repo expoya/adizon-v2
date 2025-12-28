@@ -314,7 +314,7 @@ pytest tests/test_field_enrichment.py -v
 3. ✅ Dokumentation vollständig
 
 ### Kurzfristig:
-- [ ] Zoho Field Mapping (`zoho.yaml`)
+- [x] ✅ Zoho Field Mapping (`zoho.yaml`) - DONE!
 - [ ] Undo-Support für Updates
 - [ ] Relationship-Handling (Person ↔ Company)
 
@@ -325,23 +325,257 @@ pytest tests/test_field_enrichment.py -v
 
 ---
 
+## 🔄 Zoho CRM Integration (28.12.2025)
+
+### Status: ✅ PRODUKTIONSREIF
+
+Die CRM-Integration wurde erfolgreich von Twenty auf Zoho CRM migriert. Der Adapter unterstützt alle Features und ist vollständig getestet.
+
+### 1. OAuth 2.0 Setup (Server-based Applications)
+
+**Schritt 1: Client Registration**
+1. Gehe zu: https://api-console.zoho.eu/client/
+2. Erstelle "Server-based Applications"
+3. Füge Redirect URIs hinzu:
+   - `http://localhost:3000/oauth/callback` (Development)
+   - `https://your-domain.com/oauth/callback` (Production)
+4. Notiere: `Client ID` und `Client Secret`
+
+**Schritt 2: Authorization Code**
+1. Öffne im Browser:
+```
+https://accounts.zoho.eu/oauth/v2/auth?scope=ZohoCRM.modules.ALL&client_id=YOUR_CLIENT_ID&response_type=code&access_type=offline&redirect_uri=http://localhost:3000/oauth/callback
+```
+2. Autorisiere und kopiere den Code aus der Redirect-URL
+
+**Schritt 3: Token Exchange**
+```bash
+curl -X POST https://accounts.zoho.eu/oauth/v2/token \
+  -d "grant_type=authorization_code" \
+  -d "client_id=YOUR_CLIENT_ID" \
+  -d "client_secret=YOUR_CLIENT_SECRET" \
+  -d "redirect_uri=http://localhost:3000/oauth/callback" \
+  -d "code=YOUR_AUTH_CODE"
+```
+
+**Response:** `refresh_token` (unbegrenzt gültig) + `access_token` (1h)
+
+**Wichtig:** Authorization Code läuft nach 60 Sekunden ab!
+
+### 2. Environment Variables (.env)
+
+```bash
+# CRM System Selection
+CRM_SYSTEM=ZOHO
+
+# Zoho OAuth 2.0
+ZOHO_CLIENT_ID=1000.XXXXXXXXXXXXX
+ZOHO_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxx
+ZOHO_REFRESH_TOKEN=1000.xxxxxxxxxxxxx.xxxxxxxxxxxxx
+
+# Zoho API URLs (Region-specific)
+ZOHO_API_URL=https://www.zohoapis.eu
+ZOHO_ACCOUNTS_URL=https://accounts.zoho.eu
+```
+
+### 3. Zoho Field Mapping
+
+**Datei:** `tools/crm/field_mappings/zoho.yaml`
+
+**Lead Entity (kombiniert Person & Company):**
+
+| Generic Field | Zoho API Field | Required | Type |
+|--------------|----------------|----------|------|
+| `first_name` | `First_Name` | ✅ | string |
+| `last_name` | `Last_Name` | ✅ | string |
+| `company` | `Company` | ✅ | string |
+| `email` | `Email` | ✅ | email |
+| `phone` | `Phone` | ❌ | string |
+| `mobile` | `Mobile` | ❌ | string |
+| `job` | `Designation` | ❌ | string |
+| `website` | `Website` | ❌ | url |
+| `size` | `No_of_Employees` | ❌ | number |
+| `industry` | `Industry` | ❌ | string |
+| `street` | `Street` | ❌ | string |
+| `city` | `City` | ❌ | string |
+| `state` | `State` | ❌ | string |
+| `zip` | `Zip_Code` | ❌ | string |
+| `country` | `Country` | ❌ | string |
+
+### 4. Zoho API Besonderheiten
+
+**Problem 1: `fields` Parameter ist Pflicht**
+```python
+# Zoho API verlangt explizite Felder bei GET
+response = requests.get(
+    f"{api_url}/Leads",
+    params={"fields": "id,First_Name,Last_Name,Email,Company"}
+)
+```
+
+**Fix:** Default-Fields werden automatisch hinzugefügt.
+
+**Problem 2: Notes benötigen nested `Parent_Id`**
+```python
+# Zoho Notes API Format
+payload = {
+    "data": [{
+        "Parent_Id": {
+            "module": {"api_name": "Leads"},
+            "id": "5876543210987654321"
+        },
+        "Note_Title": "Titel",
+        "Note_Content": "Inhalt"
+    }]
+}
+```
+
+**Problem 3: Tasks benötigen `$se_module` für Verknüpfung**
+```python
+# Zoho Tasks API Format
+payload = {
+    "data": [{
+        "Subject": "Titel",
+        "What_Id": "5876543210987654321",
+        "$se_module": "Leads"  # Pflicht!
+    }]
+}
+```
+
+**Problem 4: OAuth Scopes**
+```
+Benötigte Scopes:
+- ZohoCRM.modules.leads.ALL
+- ZohoCRM.modules.notes.ALL
+- ZohoCRM.modules.tasks.ALL
+
+Oder einfach: ZohoCRM.modules.ALL
+```
+
+### 5. Zoho Adapter Features
+
+**OAuth Token Management:**
+- ✅ Automatische Access Token Refresh (alle 55 Min)
+- ✅ Refresh Token ist unbegrenzt gültig
+- ✅ Transparent für API-Calls
+
+**Self-Healing:**
+- ✅ Name → Lead ID Resolution
+- ✅ Email → Lead ID Resolution
+- ✅ Fuzzy-Matching (Tippfehler-tolerant)
+
+**CRUD Operations:**
+- ✅ `create_contact()` - Lead-Erstellung (mit Required Fields)
+- ✅ `create_task()` - Task-Erstellung mit Verknüpfung
+- ✅ `create_note()` - Notiz-Erstellung mit Verknüpfung
+- ✅ `search_leads()` - Fuzzy-Search mit Scoring
+- ✅ `update_entity()` - Dynamic Field Enrichment
+- ✅ `delete_item()` - Undo-Funktion
+
+### 6. Test Suite
+
+**Datei:** `tests/test_zoho_adapter.py` (10 Tests)
+
+**Getestet:**
+1. OAuth Token Refresh
+2. create_contact() mit Required Fields
+3. create_task() mit What_Id + $se_module
+4. create_note() mit nested Parent_Id
+5. search_leads() Fuzzy-Matching
+6. _resolve_target_id() Self-Healing
+7. delete_item() Undo-Funktion
+8. update_entity() Dynamic Field Enrichment
+9. Error-Handling bei API-Fehlern
+10. Fuzzy-Matching Scoring
+
+**Ausführen:**
+```bash
+cd adizon-v2
+python tests/test_zoho_adapter.py
+# → 10/10 Tests bestanden ✅
+```
+
+### 7. Tool Signatures (Updated)
+
+**create_contact:**
+```python
+create_contact(
+    first_name: str,    # REQUIRED
+    last_name: str,     # REQUIRED
+    company: str,       # REQUIRED
+    email: str,         # REQUIRED
+    phone: str = None   # OPTIONAL
+)
+```
+
+**Wichtig:** LLM muss alle 4 Required Fields abfragen!
+
+### 8. LLM Prompt Anpassungen
+
+**crm_handler.yaml - Updated:**
+- ✅ `create_contact` verlangt jetzt 4 Required Fields
+- ✅ `undo_last_action` hat kürzere Description + explizite Trigger
+- ✅ LLM fragt automatisch nach Company + Last Name
+
+### 9. Deployment Checklist
+
+**Railway Environment Variables:**
+```bash
+CRM_SYSTEM=ZOHO
+ZOHO_CLIENT_ID=...
+ZOHO_CLIENT_SECRET=...
+ZOHO_REFRESH_TOKEN=...
+ZOHO_API_URL=https://www.zohoapis.eu
+ZOHO_ACCOUNTS_URL=https://accounts.zoho.eu
+```
+
+**Wichtig:**
+- ✅ OAuth Token mit allen Scopes generieren
+- ✅ Refresh Token (nicht Access Token!) in .env
+- ✅ Region-spezifische URLs (.eu für Europa)
+
+### 10. Migration von Twenty → Zoho
+
+**Was ändert sich:**
+- ❌ `person` + `company` Entities → ✅ `lead` Entity (kombiniert)
+- ❌ GraphQL → ✅ REST API
+- ❌ API Key → ✅ OAuth 2.0
+
+**Was bleibt gleich:**
+- ✅ Tool-Signaturen (für LLM)
+- ✅ Self-Healing (Name → ID)
+- ✅ Fuzzy-Search
+- ✅ Dynamic Field Enrichment
+- ✅ Undo-Funktion
+
+**Code-Änderungen:** 0 (nur .env + YAML)
+
+---
+
 ## 📞 Support
 
 **Für neue CRMs:**
 1. Kopiere `tools/crm/field_mappings/twenty.yaml`
 2. Benenne um zu `<crm_name>.yaml`
 3. Passe `crm_field`-Namen an
-4. Teste mit `test_field_enrichment.py`
+4. Erstelle `<crm_name>_adapter.py` analog zu `zoho_adapter.py`
+5. Teste mit `test_<crm_name>_adapter.py`
 
 **Für Custom Fields:**
-1. Öffne `tools/crm/field_mappings/twenty.yaml`
-2. Füge Feld hinzu unter `entities.company.fields`
+1. Öffne `tools/crm/field_mappings/zoho.yaml`
+2. Füge Feld hinzu unter `entities.lead.fields`
 3. Markiere mit `custom: true`
 4. Kein Code-Change nötig!
+
+**Für OAuth-Probleme:**
+- Prüfe Scopes: `ZohoCRM.modules.ALL` empfohlen
+- Prüfe Region: `.eu` vs `.com` vs `.in`
+- Prüfe Token: Refresh Token, nicht Access Token in .env
+- Authorization Code: Nur 60 Sekunden gültig!
 
 ---
 
 **Status:** ✅ Production-Ready  
-**Implementiert:** 28.12.2025 - Nacht  
+**Implementiert:** 28.12.2025 - Nacht (Twenty), 28.12.2025 - Spätabend (Zoho)  
 **Maintainer:** Michael & KI
 

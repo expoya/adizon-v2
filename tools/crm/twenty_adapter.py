@@ -311,19 +311,36 @@ class TwentyCRM:
 
         return "✅ Gefundene Datensätze:\n" + "\n".join(formatted_results)
 
-    def create_contact(self, name: str, email: str, phone: Optional[str] = None) -> str:
-        parts = name.split(" ", 1)
+    def create_contact(self, first_name: str, last_name: str, company: str, email: str, phone: Optional[str] = None) -> str:
+        """
+        Erstellt neuen Kontakt in Twenty CRM.
+        
+        Args:
+            first_name: Vorname (REQUIRED)
+            last_name: Nachname (REQUIRED)
+            company: Firmenname (REQUIRED für Zoho, bei Twenty optional)
+            email: E-Mail Adresse (REQUIRED)
+            phone: Telefonnummer (OPTIONAL)
+        """
         payload = {
-            "name": {"firstName": parts[0], "lastName": parts[1] if len(parts) > 1 else ""},
+            "name": {"firstName": first_name, "lastName": last_name},
             "emails": {"primaryEmail": email, "additionalEmails": []}
         }
-        if phone: payload["phones"] = {"primaryPhone": phone, "additionalPhones": []}
+        
+        if phone:
+            payload["phones"] = {"primaryPhone": phone, "additionalPhones": []}
 
+        # Company wird bei Twenty separat verknüpft (nicht hier)
+        # Zoho hat Company im Lead selbst, Twenty hat separate Company-Entity
+        
+        print(f"📝 Creating Person: {first_name} {last_name} <{email}>")
+        
         data = self._request("POST", "people", data=payload)
         if data:
             # Robustes ID Parsing
             new_id = data.get('createPerson', {}).get('id') or data.get('id')
-            return f"✅ Kontakt erstellt: {name} (ID: {new_id})"
+            full_name = f"{first_name} {last_name}"
+            return f"✅ Kontakt erstellt: {full_name} (ID: {new_id})"
         return "❌ Fehler beim Erstellen des Kontakts."
 
     def create_task(self, title: str, body: str = "", due_date: str = None, target_id: str = None) -> str:
