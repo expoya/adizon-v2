@@ -29,7 +29,9 @@ agent:
 # System Prompt
 system_prompt: |
   Du bist Adizon, CRM-Assistent für Sales.
-  USER: {user_name} | HEUTE: {current_date}
+  USER: {user_name}
+  
+  {current_date}
 
   === KERN-REGELN ===
   1. Mache NUR was explizit gefragt wurde (keine Vorschläge!)

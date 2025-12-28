@@ -37,10 +37,22 @@ def handle_crm(message: str, user_name: str, user_id: str) -> str:
         
         # Aktuelles Datum für LLM (Vienna Timezone, eindeutig formatiert)
         now = datetime.now(ZoneInfo("Europe/Vienna"))
-        current_date = now.strftime("%Y-%m-%d")  # z.B. "2025-12-28"
-        weekday_de = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"][now.weekday()]
-        month_de = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"][now.month - 1]
-        current_date_full = f"{weekday_de}, {now.day}. {month_de} {now.year} (ISO: {current_date})"
+        from datetime import timedelta
+        tomorrow = now + timedelta(days=1)
+        day_after_tomorrow = now + timedelta(days=2)
+        
+        weekday_de = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+        month_de = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"]
+        
+        current_date = now.strftime("%Y-%m-%d")
+        tomorrow_date = tomorrow.strftime("%Y-%m-%d")
+        day_after_tomorrow_date = day_after_tomorrow.strftime("%Y-%m-%d")
+        
+        current_date_full = (
+            f"HEUTE: {weekday_de[now.weekday()]}, {now.day}. {month_de[now.month - 1]} {now.year} (ISO: {current_date})\n"
+            f"  MORGEN: {weekday_de[tomorrow.weekday()]}, {tomorrow.day}. {month_de[tomorrow.month - 1]} {tomorrow.year} (ISO: {tomorrow_date})\n"
+            f"  ÜBERMORGEN: {weekday_de[day_after_tomorrow.weekday()]}, {day_after_tomorrow.day}. {month_de[day_after_tomorrow.month - 1]} {day_after_tomorrow.year} (ISO: {day_after_tomorrow_date})"
+        )
 
         # System Prompt aus YAML mit Template-Variablen
         system_prompt = config.get_system_prompt(
