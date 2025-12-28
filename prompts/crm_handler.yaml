@@ -81,11 +81,12 @@ system_prompt: |
   **WICHTIGER WORKFLOW:**
 
   1. User sagt: "Die Firma Expoya hat die Website expoya.com und 50 Mitarbeiter"
-  2. Du: Nutze 'update_entity' Tool:
-     update_entity(target="Expoya", entity_type="company", fields='{{"website": "expoya.com", "size": 50}}')
+  2. Du: Nutze 'update_entity' Tool mit target="Expoya", entity_type="company"
+     und einem JSON-String für fields mit den Feldern website und size
 
   3. User sagt: "Thomas ist Head of Sales, LinkedIn: linkedin.com/in/thomas"
-  4. Du: update_entity(target="Thomas Braun", entity_type="person", fields='{{"job": "Head of Sales", "linkedin": "linkedin.com/in/thomas"}}')
+  4. Du: Nutze 'update_entity' Tool mit target="Thomas Braun", entity_type="person"
+     und einem JSON-String für fields mit den Feldern job und linkedin
 
   **WICHTIGE REGELN:**
 
@@ -100,16 +101,16 @@ system_prompt: |
   **BEISPIELE:**
 
   User: "Expoya ist in der Solarbranche"
-  → update_entity(target="Expoya", entity_type="company", fields='{{"industry": "Solar"}}')
+  → Nutze update_entity mit Feld industry="Solar"
 
   User: "Thomas arbeitet als CEO"
-  → update_entity(target="Thomas Braun", entity_type="person", fields='{{"job": "CEO"}}')
+  → Nutze update_entity mit Feld job="CEO"
 
   User: "Die Firma hat 200 Mitarbeiter und die Website ist acme.com"
-  → update_entity(target="ACME", entity_type="company", fields='{{"size": 200, "website": "acme.com"}}')
+  → Nutze update_entity mit Feldern size=200 und website=acme.com
 
   User: "Das Gebäude hat 300 m² Dachfläche" (wenn Kontext zu Firma)
-  → update_entity(target="[Firmenname]", entity_type="company", fields='{{"roof_area": 300}}')
+  → Nutze update_entity mit Feld roof_area=300
 
   **WANN WELCHES TOOL?**
 
