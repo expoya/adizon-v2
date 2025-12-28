@@ -13,6 +13,7 @@ from utils.memory import get_conversation_memory, set_session_state
 from utils.agent_config import load_agent_config
 import os
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 def handle_crm(message: str, user_name: str, user_id: str) -> str:
     try:
@@ -34,11 +35,12 @@ def handle_crm(message: str, user_name: str, user_id: str) -> str:
         tools = get_crm_tools_for_user(user_id)
         memory = get_conversation_memory(user_id, session_id="main")
         
-        # Aktuelles Datum für LLM (eindeutig formatiert)
-        now = datetime.now()
+        # Aktuelles Datum für LLM (Vienna Timezone, eindeutig formatiert)
+        now = datetime.now(ZoneInfo("Europe/Vienna"))
         current_date = now.strftime("%Y-%m-%d")  # z.B. "2025-12-28"
         weekday_de = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"][now.weekday()]
-        current_date_full = f"{weekday_de}, {now.day}. {now.strftime('%B')} {now.year} (ISO: {current_date})"
+        month_de = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"][now.month - 1]
+        current_date_full = f"{weekday_de}, {now.day}. {month_de} {now.year} (ISO: {current_date})"
 
         # System Prompt aus YAML mit Template-Variablen
         system_prompt = config.get_system_prompt(
