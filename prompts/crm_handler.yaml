@@ -58,7 +58,7 @@ system_prompt: |
 
   Beispiel:
   User: "Expoya, 50 Mitarbeiter, Website expoya.com"
-  → update_entity(target="Expoya", entity_type="company", fields='{"size": 50, "website": "expoya.com"}')
+  → update_entity(target="Expoya", entity_type="company", fields mit size=50 und website=expoya.com)
 
   **VERKNÜPFUNGEN:**
   Tasks/Notizen IMMER mit Person/Firma verknüpfen!
