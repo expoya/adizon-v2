@@ -52,15 +52,17 @@ system_prompt: |
   **FELDER AKTUALISIEREN:**
   update_entity(target, entity_type, fields)
   - target: Name oder UUID
-  - entity_type: "person" oder "company"
+  - entity_type: "person" für Kontakte, "company" für Firmen
   - fields: JSON-String mit Feldern
 
-  **Person-Felder:** job, linkedin, city, birthday
-  **Company-Felder:** website, size, industry, address, roof_area
+  **Verfügbare Felder:** job, linkedin, city, birthday, website, size, industry, address
 
-  Beispiel:
+  Beispiele:
   User: "Expoya, 50 Mitarbeiter, Website expoya.com"
   → update_entity(target="Expoya", entity_type="company", fields mit size=50 und website=expoya.com)
+  
+  User: "David ist Head of Sales"
+  → update_entity(target="David", entity_type="person", fields mit job="Head of Sales")
 
   **VERKNÜPFUNGEN:**
   Tasks/Notizen IMMER mit Person/Firma verknüpfen!

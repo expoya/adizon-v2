@@ -512,31 +512,38 @@ class ZohoCRM:
         - Field Mapping: Generic Names → Zoho Field Names
         - Validation: Type-Checking + Auto-Fix
         - Self-Healing: Name/Email → ID Resolution
+        - Auto-Mapping: "person"/"company" → "lead" (Zoho hat nur Leads)
         
         Args:
             target: Name, Email oder Lead ID
-            entity_type: "lead" (bei Zoho alles Leads)
+            entity_type: "lead", "person" oder "company" (wird automatisch auf "lead" gemappt)
             fields: Dict mit generic field names
             
         Returns:
             Bestätigung mit aktualisierten Feldern
             
         Example:
-            update_entity("Max Mustermann", "lead", {"job": "CEO", "company": "Expoya"})
+            update_entity("Max Mustermann", "person", {"job": "CEO"})
+            → Wird automatisch auf entity_type="lead" gemappt
         """
+        # 0. Auto-Mapping: Bei Zoho gibt es nur "lead" (kombiniert Person + Company)
+        if entity_type in ["person", "company"]:
+            print(f"🔄 Auto-Mapping: entity_type '{entity_type}' → 'lead' (Zoho Struktur)")
+            entity_type = "lead"
+        
         print(f"📝 Update Lead: '{target}' with {fields}")
         
-        # 0. Field Mapper Check
+        # 1. Field Mapper Check
         if not self.field_mapper:
             return "❌ Field Mapping nicht verfügbar. Feature deaktiviert."
         
-        # 1. Target-ID auflösen (Self-Healing)
+        # 2. Target-ID auflösen (Self-Healing)
         lead_id = self._resolve_target_id(target)
         
         if not lead_id:
             return f"❌ Lead '{target}' nicht gefunden im CRM."
         
-        # 2. Felder validieren und mappen (nur Whitelist + Auto-Fix)
+        # 3. Felder validieren und mappen (nur Whitelist + Auto-Fix)
         validated_fields = {}
         skipped_fields = []
         
@@ -562,7 +569,7 @@ class ZohoCRM:
             if crm_field:
                 validated_fields[crm_field] = corrected_value
         
-        # 3. Check: Wurden Felder validiert?
+        # 4. Check: Wurden Felder validiert?
         if not validated_fields:
             if skipped_fields:
                 return f"⚠️ Keine gültigen Felder zum Aktualisieren. Übersprungen: {', '.join(skipped_fields)}"
@@ -571,7 +578,7 @@ class ZohoCRM:
         
         print(f"🔄 Mapped & Validated: {validated_fields}")
         
-        # 4. API Call (PUT)
+        # 5. API Call (PUT)
         payload = {"data": [validated_fields]}
         
         response = self._request("PUT", f"Leads/{lead_id}", data=payload)
@@ -580,7 +587,7 @@ class ZohoCRM:
             failed_fields = ", ".join([f"{k}={v}" for k, v in fields.items()])
             return f"❌ CRM hat Update abgelehnt. Versuchte Felder: {failed_fields}"
         
-        # 5. Response formatieren
+        # 6. Response formatieren
         updated_list = []
         for field_name, value in fields.items():
             if field_name not in skipped_fields:
