@@ -106,14 +106,14 @@ def get_crm_tools_for_user(user_id: str) -> list:
         if "✅" in res: clear_undo_context(user_id)
         return res
     
-    def update_entity_wrapper(target: str, entity_type: str, **fields) -> str:
+    def update_entity_wrapper(target: str, entity_type: str, fields: str) -> str:
         """
         Aktualisiert Felder eines CRM-Eintrags (Person oder Company).
         
         Args:
             target: Name, Email oder UUID des Eintrags
             entity_type: "person" oder "company"
-            **fields: Beliebige Felder als Keyword-Arguments
+            fields: JSON string mit Feldern, z.B. '{"website": "expoya.com", "size": 50}'
             
         Verfügbare Felder:
         
@@ -131,14 +131,20 @@ def get_crm_tools_for_user(user_id: str) -> list:
             - roof_area: [CUSTOM] Dachfläche in m² (nur für Voltage Solutions)
         
         Beispiele:
-            update_entity("Thomas Braun", "person", job="CEO", linkedin="linkedin.com/in/thomas")
-            update_entity("Expoya", "company", website="expoya.com", size=50, industry="Solar")
+            update_entity("Thomas Braun", "person", '{"job": "CEO", "linkedin": "linkedin.com/in/thomas"}')
+            update_entity("Expoya", "company", '{"website": "expoya.com", "size": 50, "industry": "Solar"}')
         """
         if not update_entity_func:
             return "❌ Update-Feature nicht verfügbar (nur im Live-Modus mit CRM-Adapter)."
         
-        # Konvertiere kwargs zu dict für Adapter
-        return update_entity_func(target, entity_type, fields)
+        # Parse JSON string zu dict
+        import json
+        try:
+            fields_dict = json.loads(fields) if isinstance(fields, str) else fields
+        except json.JSONDecodeError:
+            return f"❌ Ungültiges JSON-Format für fields: {fields}"
+        
+        return update_entity_func(target, entity_type, fields_dict)
 
     # 3. Liste zurückgeben
     tools = [
