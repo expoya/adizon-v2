@@ -188,6 +188,25 @@ class FieldMappingLoader:
                 value = f"https://{value}"
                 print(f"🔧 Auto-Fix: '{field_name}' → {value}")
         
+        # Links Object (für Twenty CRM: domainName, linkedinLink, xLink)
+        elif field_type == 'links_object':
+            if not isinstance(value, str):
+                return (False, value, f"'{field_name}' muss eine URL (String) sein")
+            
+            # Auto-Fix: Konvertiere String zu Links-Object
+            if auto_fix:
+                # Ergänze https:// falls fehlt
+                if not value.startswith(('http://', 'https://')):
+                    value = f"https://{value}"
+                
+                # Konvertiere zu Twenty CRM Links-Object Format
+                value = {
+                    "primaryLinkLabel": "",
+                    "primaryLinkUrl": value,
+                    "secondaryLinks": []
+                }
+                print(f"🔧 Auto-Fix: '{field_name}' → Links-Object (primaryLinkUrl: {value['primaryLinkUrl']})")
+        
         # String
         elif field_type == 'string':
             if not isinstance(value, str):

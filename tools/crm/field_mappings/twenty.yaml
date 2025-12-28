@@ -25,12 +25,12 @@ entities:
       
       linkedin:
         crm_field: "linkedIn"
-        type: "url"
+        type: "links_object"
         description: "LinkedIn Profil URL"
         required: false
         validation: "linkedin.com"
         example: "https://linkedin.com/in/max-mustermann"
-        llm_hint: "Muss linkedin.com enthalten"
+        llm_hint: "LinkedIn Profil-URL (muss linkedin.com enthalten)"
       
       city:
         crm_field: "city"
@@ -56,12 +56,12 @@ entities:
       
       website:
         crm_field: "domainName"
-        type: "string"
-        description: "Firmen-Website / Domain (ohne https://)"
+        type: "links_object"
+        description: "Firmen-Website / Domain"
         required: false
-        auto_fix: "strip_protocol"
+        auto_fix: true
         example: "expoya.com"
-        llm_hint: "Nur Domain ohne https:// (z.B. 'expoya.com')"
+        llm_hint: "URL der Firmen-Website (z.B. 'expoya.com' oder 'https://expoya.com')"
       
       size:
         crm_field: "employees"
