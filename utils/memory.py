@@ -79,8 +79,20 @@ def clear_user_session(user_id: str):
     # 1. State löschen
     redis_client.delete(f"adizon:state:{user_id}")
     
-    # 2. History löschen (LangChain Key)
+    # 2. History löschen (alle möglichen Keys)
+    # LangChain verwendet verschiedene Key-Formate
     redis_client.delete(f"adizon:conversation:{user_id}:main")
+    redis_client.delete(f"message_store:{user_id}:main")  # Alternative LangChain Format
+    
+    # 3. Alle Keys mit user_id Pattern löschen (für Sicherheit)
+    pattern = f"*{user_id}*"
+    keys = redis_client.keys(pattern)
+    for key in keys:
+        # Nur adizon/message Keys löschen, nicht z.B. andere App-Daten
+        if b'adizon' in key or b'message' in key or b'conversation' in key:
+            redis_client.delete(key)
+            print(f"🗑️ Deleted: {key.decode('utf-8')}")
+    
     print(f"💥 Session Nuke executed for {user_id}")
 
 # === UNDO LOGIK ===

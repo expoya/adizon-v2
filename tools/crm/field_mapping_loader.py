@@ -218,24 +218,38 @@ class FieldMappingLoader:
                 import re
                 phone_clean = value.strip().replace(' ', '').replace('-', '')
                 
-                # Versuche +XX Format zu parsen
-                country_match = re.match(r'\+(\d{1,3})', phone_clean)
-                if country_match:
-                    calling_code = f"+{country_match.group(1)}"
-                    phone_number = phone_clean[len(calling_code):]
-                    
-                    # Einfaches Country Code Mapping (erweitbar)
-                    country_codes = {
-                        "+43": "AT", "+49": "DE", "+41": "CH",
-                        "+33": "FR", "+39": "IT", "+44": "GB",
-                        "+1": "US"
-                    }
-                    country_code = country_codes.get(calling_code, "AT")  # Default: AT
-                else:
-                    # Fallback: Österreich
-                    calling_code = "+43"
-                    country_code = "AT"
-                    phone_number = phone_clean
+                # Versuche +XX Format zu parsen (max 2-stellige Country Codes bevorzugt)
+                # Prüfe zuerst bekannte Country Codes
+                country_codes = {
+                    "+43": "AT", "+49": "DE", "+41": "CH",
+                    "+33": "FR", "+39": "IT", "+44": "GB",
+                    "+1": "US", "+34": "ES", "+31": "NL",
+                    "+32": "BE", "+48": "PL", "+420": "CZ"
+                }
+                
+                calling_code = None
+                phone_number = phone_clean
+                country_code = "AT"  # Default
+                
+                # Versuche bekannte Country Codes zu matchen (längste zuerst)
+                for code, country in sorted(country_codes.items(), key=lambda x: len(x[0]), reverse=True):
+                    if phone_clean.startswith(code):
+                        calling_code = code
+                        country_code = country
+                        phone_number = phone_clean[len(code):]
+                        break
+                
+                # Fallback: Wenn kein Match, versuche generisches Pattern
+                if not calling_code:
+                    country_match = re.match(r'\+(\d{1,3})', phone_clean)
+                    if country_match:
+                        calling_code = f"+{country_match.group(1)}"
+                        phone_number = phone_clean[len(calling_code):]
+                    else:
+                        # Kein + gefunden, nehme AT default
+                        calling_code = "+43"
+                        country_code = "AT"
+                        phone_number = phone_clean.lstrip('+')
                 
                 value = {
                     "primaryPhoneNumber": phone_number,
