@@ -207,6 +207,57 @@ class FieldMappingLoader:
                 }
                 print(f"🔧 Auto-Fix: '{field_name}' → Links-Object (primaryLinkUrl: {value['primaryLinkUrl']})")
         
+        # Phones Object (für Twenty CRM: phones)
+        elif field_type == 'phones_object':
+            if not isinstance(value, str):
+                return (False, value, f"'{field_name}' muss eine Telefonnummer (String) sein")
+            
+            # Auto-Fix: Konvertiere String zu Phones-Object
+            if auto_fix:
+                # Extrahiere Country Code aus +43... Format
+                import re
+                phone_clean = value.strip().replace(' ', '').replace('-', '')
+                
+                # Versuche +XX Format zu parsen
+                country_match = re.match(r'\+(\d{1,3})', phone_clean)
+                if country_match:
+                    calling_code = f"+{country_match.group(1)}"
+                    phone_number = phone_clean[len(calling_code):]
+                    
+                    # Einfaches Country Code Mapping (erweitbar)
+                    country_codes = {
+                        "+43": "AT", "+49": "DE", "+41": "CH",
+                        "+33": "FR", "+39": "IT", "+44": "GB",
+                        "+1": "US"
+                    }
+                    country_code = country_codes.get(calling_code, "AT")  # Default: AT
+                else:
+                    # Fallback: Österreich
+                    calling_code = "+43"
+                    country_code = "AT"
+                    phone_number = phone_clean
+                
+                value = {
+                    "primaryPhoneNumber": phone_number,
+                    "primaryPhoneCallingCode": calling_code,
+                    "primaryPhoneCountryCode": country_code,
+                    "additionalPhones": []
+                }
+                print(f"🔧 Auto-Fix: '{field_name}' → Phones-Object ({calling_code} {phone_number})")
+        
+        # Emails Object (für Twenty CRM: emails)
+        elif field_type == 'emails_object':
+            if not isinstance(value, str):
+                return (False, value, f"'{field_name}' muss eine E-Mail (String) sein")
+            
+            # Auto-Fix: Konvertiere String zu Emails-Object
+            if auto_fix:
+                value = {
+                    "primaryEmail": value,
+                    "additionalEmails": None
+                }
+                print(f"🔧 Auto-Fix: '{field_name}' → Emails-Object (primaryEmail: {value['primaryEmail']})")
+        
         # String
         elif field_type == 'string':
             if not isinstance(value, str):

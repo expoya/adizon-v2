@@ -15,6 +15,24 @@ entities:
     fields:
       # Format: generic_name → CRM-spezifisches Mapping
       
+      phone:
+        crm_field: "phones"
+        type: "phones_object"
+        description: "Telefonnummer"
+        required: false
+        auto_fix: true
+        example: "+436508150791"
+        llm_hint: "Telefonnummer (internationale Vorwahl empfohlen, z.B. +43...)"
+      
+      email:
+        crm_field: "emails"
+        type: "emails_object"
+        description: "E-Mail Adresse"
+        required: false
+        auto_fix: true
+        example: "max@example.com"
+        llm_hint: "E-Mail Adresse des Kontakts"
+      
       job:
         crm_field: "jobTitle"
         type: "string"
@@ -24,7 +42,7 @@ entities:
         llm_hint: "z.B. 'CEO', 'Vertriebsleiter', 'Head of Marketing'"
       
       linkedin:
-        crm_field: "linkedIn"
+        crm_field: "linkedinLink"
         type: "links_object"
         description: "LinkedIn Profil URL"
         required: false
