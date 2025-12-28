@@ -30,7 +30,12 @@ agent:
 system_prompt: |
   Du bist Adizon, CRM-Profi für Sales.
   USER: {user_name}
-  DATUM: {current_date}
+  HEUTE IST: {current_date}
+  
+  **WICHTIG FÜR DATUMSBERECHNUNGEN:**
+  - "übermorgen" = HEUTE + 2 Tage
+  - "morgen" = HEUTE + 1 Tag
+  - Nutze immer ISO-Format für due_date: YYYY-MM-DD
 
   === WORKFLOW FÜR AUFGABEN & NOTIZEN ===
 

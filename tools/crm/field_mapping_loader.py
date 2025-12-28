@@ -184,7 +184,7 @@ class FieldMappingLoader:
                 return (False, value, f"'{field_name}' muss eine URL (String) sein")
             
             # Auto-Fix: Ergänze https://
-            if auto_fix and not value.startswith(('http://', 'https://')):
+            if auto_fix == True and not value.startswith(('http://', 'https://')):
                 value = f"https://{value}"
                 print(f"🔧 Auto-Fix: '{field_name}' → {value}")
         
@@ -192,6 +192,12 @@ class FieldMappingLoader:
         elif field_type == 'string':
             if not isinstance(value, str):
                 value = str(value)
+            
+            # Auto-Fix: Strip Protocol (für CRMs die nur Domain wollen, z.B. Twenty)
+            if auto_fix == "strip_protocol" and isinstance(value, str):
+                if value.startswith(('http://', 'https://')):
+                    value = value.replace('https://', '').replace('http://', '')
+                    print(f"🔧 Auto-Fix: '{field_name}' → {value} (Protokoll entfernt)")
         
         # === CUSTOM VALIDATION ===
         

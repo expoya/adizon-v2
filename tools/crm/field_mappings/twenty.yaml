@@ -56,12 +56,12 @@ entities:
       
       website:
         crm_field: "domainName"
-        type: "url"
-        description: "Firmen-Website / Domain"
+        type: "string"
+        description: "Firmen-Website / Domain (ohne https://)"
         required: false
-        auto_fix: true
-        example: "https://expoya.com"
-        llm_hint: "URL der Firmen-Website (https:// wird automatisch ergänzt)"
+        auto_fix: "strip_protocol"
+        example: "expoya.com"
+        llm_hint: "Nur Domain ohne https:// (z.B. 'expoya.com')"
       
       size:
         crm_field: "employees"
