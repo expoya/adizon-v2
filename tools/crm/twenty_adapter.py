@@ -499,7 +499,9 @@ class TwentyCRM:
         data = self._request("PATCH", f"{endpoint}/{entity_id}", data=validated_fields)
         
         if not data:
-            return f"❌ Fehler beim Aktualisieren von {entity_type}."
+            # Verbesserte Fehlermeldung: Zeige welche Felder versucht wurden
+            failed_fields = ", ".join([f"{list(fields.keys())[i]}={list(fields.values())[i]}" for i in range(len(fields))])
+            return f"❌ CRM hat Update abgelehnt ({entity_type}). Versuchte Felder: {failed_fields}. Hinweis: Bei 'website' muss Domain existieren (z.B. 'google.com' statt Fake-Domain)."
         
         # 5. Response formatieren
         updated_list = []
