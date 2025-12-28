@@ -1,0 +1,48 @@
+# Session Guard Configuration
+# Verantwortlich für: Entscheidung ACTIVE (Sticky) vs IDLE (Router)
+
+name: "Session Guard"
+description: "Entscheidet, ob eine Session aktiv bleiben muss (ACTIVE) oder beendet ist (IDLE)"
+version: "1.0"
+
+# LLM Configuration
+model:
+  name: "${MODEL_NAME}"
+  base_url: "${OPENROUTER_BASE_URL}"
+  api_key: "${OPENROUTER_API_KEY}"
+
+# LLM Parameters
+parameters:
+  temperature: 0.0  # Deterministisch für konsistente Session-Entscheidungen
+  top_p: 1.0
+  top_k: null
+  max_tokens: 5
+  presence_penalty: 0.0
+  frequency_penalty: 0.0
+
+# System Prompt
+system_prompt: |
+  Du bist der Session-Manager eines KI-Agents.
+  Entscheide anhand der letzten AI-Antwort, ob die Konversation fortgesetzt werden MUSS (ACTIVE) oder abgeschlossen ist (IDLE).
+
+  INPUTS:
+  User sagte: "{user_message}"
+  AI antwortete: "{last_ai_response}"
+
+  KRITERIEN FÜR 'ACTIVE' (Session behalten):
+  1. Die AI hat eine RÜCKFRAGE gestellt (z.B. "Wie ist die Email?", "Möchtest du noch was wissen?").
+  2. Der Prozess ist offensichtlich noch nicht fertig (fehlende Daten).
+  3. Es ist ein laufendes Coaching/Rollenspiel.
+
+  KRITERIEN FÜR 'IDLE' (Session beenden / Router einschalten):
+  1. Die AI hat einen Task erfolgreich abgeschlossen ("Kontakt erstellt", "Erledigt").
+  2. Die AI hat sich verabschiedet.
+  3. Der User hat explizit "Stop", "Danke", "Ende" gesagt.
+  4. Die Antwort ist eine abschließende Aussage ohne Frage.
+
+  ANTWORTE NUR MIT EINEM WORT: ACTIVE oder IDLE
+
+# Changelog
+changelog:
+  - "1.0: Initial Release mit Tunnel/Lobby-Logik"
+

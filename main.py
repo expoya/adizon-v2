@@ -12,6 +12,7 @@ import os
 from agents.chat_handler import handle_chat
 from utils.memory import get_session_state, clear_user_session
 from agents.crm_handler import handle_crm
+from utils.agent_config import load_agent_config
 import requests
 
 # FastAPI App
@@ -40,45 +41,33 @@ def detect_intent(message: str) -> str:
     print(f"📝 Message: {message}")
     
     try:
-        print(f"🔑 API Key exists: {bool(os.getenv('OPENROUTER_API_KEY'))}")
-        print(f"🌐 Base URL: {os.getenv('OPENROUTER_BASE_URL')}")
-        print(f"🤖 Model: {os.getenv('MODEL_NAME')}")
+        # Load Agent Config from YAML
+        config = load_agent_config("intent_detection")
+        
+        model_config = config.get_model_config()
+        params = config.get_parameters()
+        
+        print(f"🔑 API Key exists: {bool(model_config.get('api_key'))}")
+        print(f"🌐 Base URL: {model_config.get('base_url')}")
+        print(f"🤖 Model: {model_config.get('name')}")
         
         client = OpenAI(
-            base_url=os.getenv("OPENROUTER_BASE_URL"),
-            api_key=os.getenv("OPENROUTER_API_KEY")
+            base_url=model_config['base_url'],
+            api_key=model_config['api_key']
         )
         
         print(f"✅ Client created")
         
+        # System Prompt aus YAML
+        system_prompt = config.get_system_prompt()
+        
         response = client.chat.completions.create(
-            model=os.getenv("MODEL_NAME"),
+            model=model_config['name'],
             messages=[
-                {
-                    "role": "system",
-                    "content": """Du bist ein strikter Intent Classifier für eine Business-Software.
-
-ENTSCHEIDUNGS-REGELN:
-
-KATEGORIE 'CRM' (Business Logic):
-1.  Jede Erwähnung von "CRM", "Datenbank", "System", "Speichern", "Suchen".
-2.  Jede Frage nach EXISTENZ ("Haben wir...", "Kennst du...", "Gibt es...").
-3.  Jede Nennung von NAMEN (Personen, Firmen) oder E-MAILS.
-4.  Befehle: "Erstelle", "Suche", "Verkaufe", "Notiz".
-
-KATEGORIE 'CHAT' (Smalltalk):
-1.  NUR reine Begrüßungen ("Hallo", "Moin").
-2.  NUR Fragen zum Befinden ("Wie gehts", "Alles fit").
-3.  NUR philosophische Fragen ("Wer bist du", "Was kannst du").
-
-WICHTIG: Im Zweifel IMMER 'CRM' wählen, damit der Agent in der Datenbank nachsehen kann!
-
-Antworte NUR mit einem Wort: CHAT oder CRM"""
-                },
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": message}
             ],
-            temperature=0.0,  
-            max_tokens=5    
+            **params
         )
         
         print(f"✅ API Call successful")

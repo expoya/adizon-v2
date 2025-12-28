@@ -4,6 +4,7 @@ Entscheidet, ob eine Session aktiv bleiben muss oder beendet ist.
 """
 
 from openai import OpenAI
+from utils.agent_config import load_agent_config
 import os
 
 def check_session_status(last_ai_response: str, user_message: str) -> str:
@@ -15,39 +16,29 @@ def check_session_status(last_ai_response: str, user_message: str) -> str:
         'IDLE'   -> Zurück zum Router (Intent Detection)
     """
     try:
+        # Load Agent Config from YAML
+        config = load_agent_config("session_guard")
+        
+        model_config = config.get_model_config()
+        params = config.get_parameters()
+        
         client = OpenAI(
-            base_url=os.getenv("OPENROUTER_BASE_URL"),
-            api_key=os.getenv("OPENROUTER_API_KEY")
+            base_url=model_config['base_url'],
+            api_key=model_config['api_key']
         )
         
-        # Der Prompt entscheidet über "Tunnel" oder "Lobby"
-        prompt = f"""Du bist der Session-Manager eines KI-Agents.
-Entscheide anhand der letzten AI-Antwort, ob die Konversation fortgesetzt werden MUSS (ACTIVE) oder abgeschlossen ist (IDLE).
-
-INPUTS:
-User sagte: "{user_message}"
-AI antwortete: "{last_ai_response}"
-
-KRITERIEN FÜR 'ACTIVE' (Session behalten):
-1. Die AI hat eine RÜCKFRAGE gestellt (z.B. "Wie ist die Email?", "Möchtest du noch was wissen?").
-2. Der Prozess ist offensichtlich noch nicht fertig (fehlende Daten).
-3. Es ist ein laufendes Coaching/Rollenspiel.
-
-KRITERIEN FÜR 'IDLE' (Session beenden / Router einschalten):
-1. Die AI hat einen Task erfolgreich abgeschlossen ("Kontakt erstellt", "Erledigt").
-2. Die AI hat sich verabschiedet.
-3. Der User hat explizit "Stop", "Danke", "Ende" gesagt.
-4. Die Antwort ist eine abschließende Aussage ohne Frage.
-
-ANTWORTE NUR MIT EINEM WORT: ACTIVE oder IDLE"""
+        # System Prompt aus YAML mit Template-Variablen
+        system_prompt = config.get_system_prompt(
+            user_message=user_message,
+            last_ai_response=last_ai_response
+        )
 
         response = client.chat.completions.create(
-            model=os.getenv("MODEL_NAME"), # Nutzt Ministral (smart genug dafür)
+            model=model_config['name'],
             messages=[
-                {"role": "system", "content": prompt}
+                {"role": "system", "content": system_prompt}
             ],
-            temperature=0.0,
-            max_tokens=5
+            **params
         )
         
         decision = response.choices[0].message.content.strip().upper()

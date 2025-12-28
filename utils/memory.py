@@ -70,3 +70,25 @@ def clear_user_session(user_id: str):
     # 2. History löschen (LangChain Key)
     redis_client.delete(f"adizon:conversation:{user_id}:main")
     print(f"💥 Session Nuke executed for {user_id}")
+
+# === UNDO LOGIK ===
+def save_undo_context(user_id: str, item_type: str, item_id: str):
+    """Speichert: 'Was hat User X zuletzt erstellt?' (TTL 1h)"""
+    key = f"adizon:undo:{user_id}"
+    val = f"{item_type}:{item_id}"
+    redis_client.set(key, val, ex=3600)
+    print(f"💾 Undo saved: {item_type} → {item_id} (User: {user_id})")
+
+def get_undo_context(user_id: str):
+    """Liest das letzte Element."""
+    data = redis_client.get(f"adizon:undo:{user_id}")
+    if data:
+        decoded = data.decode('utf-8').split(":", 1)
+        print(f"🔍 Undo retrieved: {decoded[0]} → {decoded[1]} (User: {user_id})")
+        return decoded
+    print(f"⚠️ Undo context empty for user: {user_id}")
+    return None, None
+
+def clear_undo_context(user_id: str):
+    """Löscht das Element nach Undo."""
+    redis_client.delete(f"adizon:undo:{user_id}")

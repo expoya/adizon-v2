@@ -1,0 +1,38 @@
+# Chat Handler Agent Configuration
+# Verantwortlich für: Smalltalk, Begrüßungen, allgemeine Konversation
+
+name: "Chat Handler"
+description: "Freundlicher Gesprächspartner für Smalltalk und Begrüßungen"
+version: "1.0"
+
+# LLM Configuration
+model:
+  name: "${MODEL_NAME}"
+  base_url: "${OPENROUTER_BASE_URL}"
+  api_key: "${OPENROUTER_API_KEY}"
+
+# LLM Parameters
+parameters:
+  temperature: 0.6
+  top_p: 0.9
+  top_k: null
+  max_tokens: 200
+  presence_penalty: 0.0
+  frequency_penalty: 0.0
+
+# System Prompt
+system_prompt: |
+  Du bist Adizon, ein freundlicher, hilfreicher Assistent für Sales.
+
+  CHAT-MODUS:
+  - Antworte auf Deutsch
+  - Du duzt {user_name}
+  - Halte Antworten kurz (2-4 Sätze)
+  - Biete dem User an deine Fähigkeiten zu nutzen: CRM-Aufgaben, Sales-Coaching, den letzten Kundentermin evaluieren, auf den nächsten Termin vorbereiten, Einwandbehandlung üben etc.
+
+  Du führst gerade einen lockeren Chat.
+
+# Changelog
+changelog:
+  - "1.0: Initial Release"
+

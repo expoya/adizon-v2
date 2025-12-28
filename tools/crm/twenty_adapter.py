@@ -49,14 +49,70 @@ class TwentyCRM:
             print(f"❌ Network Error at {endpoint}: {e}")
             return None
 
+    def _resolve_target_id(self, target: str) -> Optional[str]:
+        """
+        Sucht intelligent nach UUIDs.
+        Strategie:
+        1. Ist es schon eine UUID? -> Return.
+        2. Ist es eine E-Mail (@)? -> Suche nach E-Mail.
+        3. Ist es ein Name? -> Suche nach Namen.
+        """
+        if not target: return None
+        target = target.strip()
+        
+        # 1. UUID Check (einfache Heuristik: lang, keine Leerzeichen, kein @)
+        if len(target) > 20 and " " not in target and "@" not in target:
+            return target  # Wir vertrauen, dass es eine ID ist
+
+        print(f"🔍 Resolve UUID für: '{target}'...")
+        
+        try:
+            # Wir laden etwas mehr Daten für den Abgleich
+            data = self._request("GET", "people", params={"limit": 500}) or {}
+            people = data.get('people', [])
+            
+            target_lower = target.lower()
+            
+            # 2. Suche
+            for p in people:
+                pid = p.get('id')
+                
+                # A) E-Mail Match
+                if "@" in target:
+                    emails = p.get('emails') or []
+                    p_mail = ""
+                    if isinstance(emails, list) and emails: p_mail = emails[0].get('primaryEmail', '')
+                    elif isinstance(emails, dict): p_mail = emails.get('primaryEmail', '')
+                    
+                    if p_mail.lower() == target_lower:
+                        print(f"✅ UUID gefunden (via Email): {pid}")
+                        return pid
+
+                # B) Name Match (Vorname Nachname)
+                else:
+                    name_obj = p.get('name') or {}
+                    full_name = f"{name_obj.get('firstName', '')} {name_obj.get('lastName', '')}".strip()
+                    
+                    # Check: Ist der Suchbegriff im Namen enthalten?
+                    if target_lower in full_name.lower():
+                        print(f"✅ UUID gefunden (via Name '{full_name}'): {pid}")
+                        return pid
+            
+            print(f"⚠️ Nichts gefunden für '{target}' in den letzten 500 Kontakten.")
+            return None
+            
+        except Exception as e:
+            print(f"❌ Resolve Fehler: {e}")
+            return None
+
     def search_contacts(self, query: str) -> str:
         """
-        Production Search:
+        Smart-Fuzzy-Search:
         1. Findet Firmen via Name-Filter.
         2. Lädt Mitarbeiter dieser Firmen (Relation).
         3. Findet Personen via Name-Filter.
         """
-        print(f"🕵️ Production-Search für: '{query}'")
+        print(f"🕵️ Smart-Fuzzy-Search für: '{query}'")
         results = []
         
         # --- STRATEGIE 1: FIRMEN FINDEN ---
@@ -151,40 +207,7 @@ class TwentyCRM:
         
         # --- PHASE 0: ID REPARATUR (Self-Healing) ---
         # Wenn der Agent eine Email statt einer UUID sendet, fixen wir das hier.
-        real_target_id = target_id
-        
-        if target_id and "@" in target_id:
-            print(f"🔧 Target '{target_id}' ist eine Email. Suche UUID...")
-            try:
-                # Wir filtern gezielt nach der Email
-                # Hinweis: Syntax für Filter kann variieren, Standard Twenty REST ist oft:
-                # filter[emails][primaryEmail][eq]=... oder wir nutzen unsere Search Logic
-                
-                # Wir nutzen den sicheren Weg: Fetch all matches (kleines Limit) und Python Filter
-                # (Sicherster Weg ohne Doku-Wälzen für Filter-Syntax)
-                data = self._request("GET", "people", params={"limit": 10}) or {}
-                people = data.get('people', [])
-                
-                found_id = None
-                for p in people:
-                    # Email Check
-                    emails = p.get('emails') or []
-                    p_email = ""
-                    if isinstance(emails, list) and emails: p_email = emails[0].get('primaryEmail', '')
-                    elif isinstance(emails, dict): p_email = emails.get('primaryEmail', '')
-                    
-                    if p_email.lower() == target_id.lower():
-                        found_id = p.get('id')
-                        break
-                
-                if found_id:
-                    real_target_id = found_id
-                    print(f"✅ UUID gefunden: {real_target_id}")
-                else:
-                    print(f"⚠️ Konnte keine ID für Email '{target_id}' finden.")
-                    # Wir machen trotzdem weiter, vielleicht ist es doch eine ID (sehr unwahrscheinlich bei @)
-            except Exception as e:
-                print(f"⚠️ ID-Resolve Fehler: {e}")
+        real_target_id = self._resolve_target_id(target_id)
 
         # --- PHASE 1: TASK ERSTELLEN ---
         payload = {
@@ -238,22 +261,7 @@ class TwentyCRM:
         print(f"📝 Twenty: Erstelle Notiz '{title}' für Target '{target_id}'...")
 
         # --- PHASE 0: ID REPARATUR ---
-        real_target_id = target_id
-        if target_id and "@" in target_id:
-            # (Der Lookup Code bleibt gleich wie vorher - zur Sicherheit hier gekürzt gedacht, 
-            # aber du kannst den Block vom letzten Mal drin lassen oder den vollen Code unten nehmen)
-            # Damit wir nichts kaputt machen, hier der kompakte Lookup:
-            try:
-                data = self._request("GET", "people", params={"limit": 10}) or {}
-                for p in data.get('people', []):
-                    emails = p.get('emails') or []
-                    p_mail = emails[0].get('primaryEmail', '') if isinstance(emails, list) and emails else ""
-                    if isinstance(emails, dict): p_mail = emails.get('primaryEmail', '')
-                    if p_mail.lower() == target_id.lower():
-                        real_target_id = p.get('id')
-                        print(f"✅ UUID gefunden: {real_target_id}")
-                        break
-            except: pass
+        real_target_id = self._resolve_target_id(target_id)
 
         # --- PHASE 1: NOTIZ ERSTELLEN ---
         # Hier ist die Änderung: Wir nutzen den Titel vom LLM!
@@ -274,7 +282,7 @@ class TwentyCRM:
             return "❌ Fehler: Notiz konnte nicht erstellt werden."
 
         new_note_id = data.get('createNote', {}).get('id') or data.get('id')
-        output = f"✅ Notiz '{final_title}' erstellt."
+        output = f"✅ Notiz '{final_title}' erstellt (ID: {new_note_id})."
 
         # --- PHASE 2: VERKNÜPFUNG ---
         if real_target_id and new_note_id:
@@ -290,3 +298,29 @@ class TwentyCRM:
                 except: pass
 
         return output
+
+    # Generische Lösch-Funktion
+    def delete_item(self, item_type: str, item_id: str) -> str:
+        """Löscht ein Objekt (Person, Task, Note) anhand der ID."""
+        endpoint_map = {
+            "person": "people",
+            "contact": "people",
+            "task": "tasks",
+            "note": "notes"
+        }
+        endpoint = endpoint_map.get(item_type)
+        if not endpoint: return "❌ Fehler: Unbekannter Typ."
+
+        print(f"🗑️ Deleting {item_type} {item_id}...")
+        try:
+            url = f"{self.base_url}/rest/{endpoint}/{item_id}"
+            resp = requests.delete(url, headers=self.headers)
+            
+            if resp.status_code in [200, 204]:
+                return "✅ Aktion erfolgreich rückgängig gemacht."
+            elif resp.status_code == 404:
+                return "⚠️ Element war bereits gelöscht."
+            else:
+                return f"❌ Fehler beim Löschen: {resp.text}"
+        except Exception as e:
+            return f"❌ Fehler: {e}"

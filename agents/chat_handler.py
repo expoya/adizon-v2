@@ -4,6 +4,7 @@ Spezialist für: Smalltalk, Begrüßungen, allgemeine Konversation
 """
 
 from openai import OpenAI
+from utils.agent_config import load_agent_config
 import os
 
 
@@ -20,32 +21,29 @@ def handle_chat(message: str, user_name: str) -> str:
     """
     
     try:
+        # Load Agent Config from YAML
+        config = load_agent_config("chat_handler")
+        
+        model_config = config.get_model_config()
+        params = config.get_parameters()
+        
         client = OpenAI(
-            base_url=os.getenv("OPENROUTER_BASE_URL"),
-            api_key=os.getenv("OPENROUTER_API_KEY")
+            base_url=model_config['base_url'],
+            api_key=model_config['api_key']
         )
         
-        system_prompt = f"""Du bist Adizon, ein freundlicher, hilfreicher Assistent für Sales.
-
-CHAT-MODUS:
-- Antworte auf Deutsch
-- Du duzt ({user_name})
-- Halte Antworten kurz (2-4 Sätze)
-- Biete dem User an deine Fähigkeiten zu nutzen: CRM-Aufgaben, Sales-Coaching, den letzten Kundentermin evaluieren, auf den nächsten Termin vorbereiten, Einwandbehandlung üben etc.
-
-Du führst gerade einen lockeren Chat."""
+        # System Prompt aus YAML mit Template-Variablen
+        system_prompt = config.get_system_prompt(user_name=user_name)
 
         print(f"💬 Adizon (Chat) processing: {message[:50]}...")
         
         response = client.chat.completions.create(
-            model=os.getenv("MODEL_NAME"),
+            model=model_config['name'],
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": message}
             ],
-            top_p=0.9,
-            temperature=0.6,
-            max_tokens=200
+            **params  # temperature, top_p, max_tokens, etc.
         )
         
         ai_response = response.choices[0].message.content

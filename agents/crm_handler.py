@@ -1,96 +1,75 @@
 """
-Adizon - CRM Handler mit LangChain Tools
+Adizon - CRM Handler
 """
-
 from langchain_openai import ChatOpenAI
 from langchain.agents import create_tool_calling_agent, AgentExecutor
 from langchain.prompts import ChatPromptTemplate
-from tools.crm import create_contact, search_contacts, create_task, create_note
+
+# Importiert nur die Factory!
+from tools.crm import get_crm_tools_for_user
+
 from agents.session_guard import check_session_status
 from utils.memory import get_conversation_memory, set_session_state
+from utils.agent_config import load_agent_config
 import os
 from datetime import datetime
 
 def handle_crm(message: str, user_name: str, user_id: str) -> str:
-    """
-    Adizon's CRM-Funktion mit Tool Calling
-    """
-    
     try:
-        print(f"🏢 Adizon (CRM) processing: {message[:50]}...")
+        # Load Agent Config from YAML
+        config = load_agent_config("crm_handler")
         
-        # LLM initialisieren
+        # LLM Setup mit Config
+        model_config = config.get_model_config()
+        params = config.get_parameters()
+        
         llm = ChatOpenAI(
-            base_url=os.getenv("OPENROUTER_BASE_URL"),
-            api_key=os.getenv("OPENROUTER_API_KEY"),
-            model=os.getenv("MODEL_NAME"),
-            top_p=0.9,
-            temperature=0.4 
+            base_url=model_config['base_url'],
+            api_key=model_config['api_key'],
+            model=model_config['name'],
+            **params  # temperature, top_p, max_tokens, etc.
         )
         
-        # Tools Liste
-        tools = [search_contacts, create_contact, create_task, create_note]
-        
+        # Tools & Memory
+        tools = get_crm_tools_for_user(user_id)
         memory = get_conversation_memory(user_id, session_id="main")
-        
         current_date = datetime.now().strftime("%A, %Y-%m-%d")
-        # Prompt Template - Strikter & Handlungsorientierter
+
+        # System Prompt aus YAML mit Template-Variablen
+        system_prompt = config.get_system_prompt(
+            user_name=user_name,
+            current_date=current_date
+        )
+
         prompt = ChatPromptTemplate.from_messages([
-            ("system", f"""Du bist Adizon, ein freundlicher, hilfreicher CRM-Assistent.
-
-USER INFO:
-- Name: {user_name}
-- ID: {user_id}
-
-HEUTIGES DATUM: {current_date}
-    (Nutze dieses Datum, um relative Zeiten wie 'morgen' oder 'nächsten Montag' exakt zu berechnen).
-
-REGELN:
-1. TOOL-FIRST: Wenn der User was will und die Daten da sind -> MACH ES SOFORT. 
-2. MEMORY: Nutze Wissen aus dem Chatverlauf.
-3. Wenn du einen Kontakt erstellen willst oder sollst, aber dir Daten fehlen, frage direkt nach fehlenden Daten. SEHR WICHTIG: Stelle auf keinen Fall Fragen wie "Brauche ich die Email?"!   
-4. Deine Sprache: Kurz & knackig, aber charmant.
-
-VERFÜGBARE TOOLS:
-- create_contact(name, email, phone): Erfordert ZWINGEND Name UND Email.
-- search_contacts(query): Suche nach Namen, Firmen oder E-Mails.
-
-Beispiel:
-User: "Suche Michael" -> [Rufe Tool search_contacts auf] -> "Hier sind die Ergebnisse..."
-"""),
+            ("system", system_prompt),
             ("placeholder", "{chat_history}"),
             ("human", "{input}"),
             ("placeholder", "{agent_scratchpad}")
         ])
         
-        # Agent erstellen
+        # Agent Config aus YAML
+        agent_config = config.get_agent_config()
+        
         agent = create_tool_calling_agent(llm, tools, prompt)
         agent_executor = AgentExecutor(
-            agent=agent,
-            tools=tools,
-            memory=memory,
-            verbose=True,
-            max_iterations=3,
-            handle_parsing_errors=True
+            agent=agent, 
+            tools=tools, 
+            memory=memory, 
+            verbose=agent_config.get('verbose', True),
+            handle_parsing_errors=agent_config.get('handle_parsing_errors', True),
+            max_iterations=agent_config.get('max_iterations', 5)
         )
         
-        # Agent ausführen
         response = agent_executor.invoke({"input": message})
         final_output = response['output']
 
-        # === NEU: GUARD CHECK ===
-        # Wir prüfen: Muss die Session offen bleiben?
+        # Session Guard
         new_state = check_session_status(final_output, message)
-        
-        # Speichern in Redis
         set_session_state(user_id, new_state)
-        
-        print(f"🛡️ Session Guard Decision: {new_state}")
         
         return final_output
         
     except Exception as e:
-        print(f"❌ CRM Handler Error: {e}")
-        import traceback
-        print(traceback.format_exc())
-        return f"Technischer Fehler im CRM Modul: {str(e)}"
+        print(f"❌ CRM Error: {e}")
+        return f"Fehler: {str(e)}"
