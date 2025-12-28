@@ -1,12 +1,13 @@
 """
 Twenty CRM Adapter - PRODUCTION GRADE
-Strict Filtering, Real Relations, Scalable.
+Strict Filtering, Real Relations, Scalable, Fuzzy-Search.
 """
 import os
 import requests
 import json
 import traceback
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Tuple
+from rapidfuzz import fuzz
 
 class TwentyCRM:
     def __init__(self):
@@ -28,6 +29,47 @@ class TwentyCRM:
             "Accept": "application/json"
         }
         print(f"🔗 Twenty Production-Adapter connected to: {self.base_url}")
+
+    def _fuzzy_match(self, query: str, target: str, threshold: int = 70) -> Tuple[bool, float]:
+        """
+        Fuzzy-Matching mit rapidfuzz.
+        
+        Strategien:
+        1. Token Sort Ratio - Wort-Reihenfolge egal ("Braun Thomas" = "Thomas Braun")
+        2. Partial Ratio - Findet Teilstrings mit Toleranz ("Thomas" in "Thomas Braun")
+        3. Ratio - Gesamtähnlichkeit
+        
+        Args:
+            query: Suchbegriff
+            target: Zu vergleichender Text
+            threshold: Minimaler Score (0-100)
+            
+        Returns:
+            (is_match, score)
+        """
+        if not query or not target:
+            return (False, 0.0)
+        
+        q = query.lower().strip()
+        t = target.lower().strip()
+        
+        # Strategie 1: Exaktes Substring-Match (schnellster Weg)
+        if q in t:
+            return (True, 100.0)
+        
+        # Strategie 2: Token Sort (Reihenfolge egal)
+        token_score = fuzz.token_sort_ratio(q, t)
+        
+        # Strategie 3: Partial Ratio (Substring mit Fuzzy)
+        partial_score = fuzz.partial_ratio(q, t)
+        
+        # Strategie 4: Standard Ratio (Gesamtähnlichkeit)
+        simple_score = fuzz.ratio(q, t)
+        
+        # Bester Score gewinnt
+        best_score = max(token_score, partial_score, simple_score)
+        
+        return (best_score >= threshold, float(best_score))
 
     def _request(self, method: str, endpoint: str, params: dict = None, data: dict = None):
         """Zentraler Request-Handler mit Error-Management"""
@@ -51,11 +93,11 @@ class TwentyCRM:
 
     def _resolve_target_id(self, target: str) -> Optional[str]:
         """
-        Sucht intelligent nach UUIDs.
+        Sucht intelligent nach UUIDs mit Fuzzy-Matching.
         Strategie:
         1. Ist es schon eine UUID? -> Return.
-        2. Ist es eine E-Mail (@)? -> Suche nach E-Mail.
-        3. Ist es ein Name? -> Suche nach Namen.
+        2. Ist es eine E-Mail (@)? -> Fuzzy-Suche nach E-Mail.
+        3. Ist es ein Name? -> Fuzzy-Suche nach Namen (sortiert nach Score).
         """
         if not target: return None
         target = target.strip()
@@ -64,16 +106,17 @@ class TwentyCRM:
         if len(target) > 20 and " " not in target and "@" not in target:
             return target  # Wir vertrauen, dass es eine ID ist
 
-        print(f"🔍 Resolve UUID für: '{target}'...")
+        print(f"🔍 Fuzzy-Resolve UUID für: '{target}'...")
         
         try:
             # Wir laden etwas mehr Daten für den Abgleich
             data = self._request("GET", "people", params={"limit": 500}) or {}
             people = data.get('people', [])
             
-            target_lower = target.lower()
+            # Kandidaten mit Scores sammeln
+            candidates = []
             
-            # 2. Suche
+            # 2. Suche mit Fuzzy-Matching
             for p in people:
                 pid = p.get('id')
                 
@@ -84,19 +127,26 @@ class TwentyCRM:
                     if isinstance(emails, list) and emails: p_mail = emails[0].get('primaryEmail', '')
                     elif isinstance(emails, dict): p_mail = emails.get('primaryEmail', '')
                     
-                    if p_mail.lower() == target_lower:
-                        print(f"✅ UUID gefunden (via Email): {pid}")
-                        return pid
+                    if p_mail:
+                        is_match, score = self._fuzzy_match(target, p_mail, threshold=80)
+                        if is_match:
+                            candidates.append({'id': pid, 'score': score, 'matched': p_mail, 'type': 'email'})
 
-                # B) Name Match (Vorname Nachname)
+                # B) Name Match (Fuzzy)
                 else:
                     name_obj = p.get('name') or {}
                     full_name = f"{name_obj.get('firstName', '')} {name_obj.get('lastName', '')}".strip()
                     
-                    # Check: Ist der Suchbegriff im Namen enthalten?
-                    if target_lower in full_name.lower():
-                        print(f"✅ UUID gefunden (via Name '{full_name}'): {pid}")
-                        return pid
+                    if full_name:
+                        is_match, score = self._fuzzy_match(target, full_name, threshold=70)
+                        if is_match:
+                            candidates.append({'id': pid, 'score': score, 'matched': full_name, 'type': 'name'})
+            
+            # 3. Besten Kandidaten wählen (höchster Score)
+            if candidates:
+                best = max(candidates, key=lambda x: x['score'])
+                print(f"✅ UUID gefunden (via {best['type']} '{best['matched']}', Score: {best['score']:.0f}%): {best['id']}")
+                return best['id']
             
             print(f"⚠️ Nichts gefunden für '{target}' in den letzten 500 Kontakten.")
             return None
@@ -107,55 +157,45 @@ class TwentyCRM:
 
     def search_contacts(self, query: str) -> str:
         """
-        Smart-Fuzzy-Search:
-        1. Findet Firmen via Name-Filter.
+        Smart-Fuzzy-Search mit Scoring & Sortierung:
+        1. Findet Firmen via Fuzzy-Match.
         2. Lädt Mitarbeiter dieser Firmen (Relation).
-        3. Findet Personen via Name-Filter.
+        3. Findet Personen via Fuzzy-Match (Name + Email).
+        4. Sortiert nach Relevanz-Score (beste Matches zuerst).
         """
         print(f"🕵️ Smart-Fuzzy-Search für: '{query}'")
         results = []
         
-        # --- STRATEGIE 1: FIRMEN FINDEN ---
-        # Wir nutzen den 'ilike' Filter der API (Case Insensitive)
-        # Syntax kann variieren, wir nutzen hier Standard REST Parameter
-        # Fallback: Wir holen Companies und filtern (wenn API kein ilike unterstützt), 
-        # aber wir limitieren die fetch size.
-        
+        # --- STRATEGIE 1: FIRMEN FINDEN (FUZZY) ---
         companies_found = []
         
-        # API Call für Firmen
         raw_companies = self._request("GET", "companies", params={"limit": 50}) or {}
         company_list = raw_companies.get('companies', [])
         
         for c in company_list:
             c_name = c.get('name', '')
-            if query.lower() in c_name.lower(): # Client-Side Filter als Fallback für Präzision
+            if not c_name:
+                continue
+            
+            # Fuzzy-Match für Firmennamen
+            is_match, score = self._fuzzy_match(query, c_name, threshold=70)
+            
+            if is_match:
                 companies_found.append(c)
-                results.append(f"🏢 FIRMA: {c_name} (ID: {c.get('id')})")
+                results.append({
+                    'type': 'company',
+                    'name': c_name,
+                    'id': c.get('id'),
+                    'score': score,
+                    'display': f"🏢 FIRMA: {c_name}"
+                })
 
-        # --- STRATEGIE 2: MITARBEITER DER GEFUNDENEN FIRMEN ---
-        if companies_found:
-            for c in companies_found:
-                cid = c.get('id')
-                c_name = c.get('name')
-                
-                # Gezielter Request: Gib mir alle People mit dieser CompanyID
-                # Hinweis: Filter-Syntax in REST ist oft komplex. 
-                # Wir nutzen hier den pragmatischen Weg: Filtern im Loop ist sicherer ohne genaue API Doku,
-                # aber wir wissen jetzt, wonach wir suchen.
-                
-                # Besserer Weg: Wir holen People und prüfen die companyId lokal, 
-                # da wir keine Filter-Doku haben.
-                # In ECHTEM PROD mit Doku würde hier stehen: ?filter[companyId]={cid}
-                
-                # Wir nutzen hier wieder den General Fetch, aber wir wissen genau, was wir matchen wollen.
-                pass # Die Logik führen wir unten im People-Loop zusammen
-        
-        # --- STRATEGIE 3: PERSONEN FINDEN (Direkt & Relation) ---
+        # --- STRATEGIE 2: PERSONEN FINDEN (FUZZY) ---
         raw_people = self._request("GET", "people", params={"limit": 100}) or {}
         people_list = raw_people.get('people', [])
         
         company_map = {c.get('id'): c.get('name') for c in companies_found}
+        matched_person_ids = set()  # Verhindert Duplikate
 
         for p in people_list:
             # Parsing
@@ -169,22 +209,57 @@ class TwentyCRM:
             pid = p.get('id')
             person_cid = p.get('companyId')
 
-            # Match Check 1: Name/Email
-            is_name_match = query.lower() in full_name.lower() or query.lower() in email.lower()
+            # Fuzzy-Match auf Name & Email
+            name_match, name_score = self._fuzzy_match(query, full_name, threshold=70)
+            email_match, email_score = self._fuzzy_match(query, email, threshold=75) if email else (False, 0)
             
-            # Match Check 2: Gehört zu gefundener Firma
-            is_colleague_match = person_cid in company_map
+            # Bester Score gewinnt
+            best_score = max(name_score, email_score)
+            is_match = name_match or email_match
 
-            if is_colleague_match:
+            # Match Check 2: Gehört zu gefundener Firma (Bonus-Score)
+            is_colleague_match = person_cid in company_map
+            
+            if is_colleague_match and pid not in matched_person_ids:
                 company_name = company_map[person_cid]
-                results.append(f"👉 MITARBEITER bei {company_name}: {full_name} <{email}> (ID: {pid})")
-            elif is_name_match:
-                results.append(f"👤 PERSON: {full_name} <{email}> (ID: {pid})")
+                # Kollegen bekommen Bonus-Score (damit sie oben stehen)
+                colleague_score = max(best_score, 85.0)
+                results.append({
+                    'type': 'colleague',
+                    'name': full_name,
+                    'email': email,
+                    'id': pid,
+                    'score': colleague_score,
+                    'company': company_name,
+                    'display': f"👉 MITARBEITER bei {company_name}: {full_name} <{email}>"
+                })
+                matched_person_ids.add(pid)
+            
+            elif is_match and pid not in matched_person_ids:
+                results.append({
+                    'type': 'person',
+                    'name': full_name,
+                    'email': email,
+                    'id': pid,
+                    'score': best_score,
+                    'display': f"👤 PERSON: {full_name} <{email}>"
+                })
+                matched_person_ids.add(pid)
+
+        # --- SORTIERUNG nach Score (beste Matches zuerst) ---
+        results.sort(key=lambda x: x['score'], reverse=True)
 
         if not results:
             return f"❌ Keine Einträge für '{query}' gefunden."
 
-        return "✅ Gefundene Datensätze:\n" + "\n".join(results)
+        # Formatierung mit Score (optional für Debug)
+        formatted_results = []
+        for r in results:
+            # Score nur anzeigen, wenn < 100 (bei perfekten Matches weglassen)
+            score_display = f" [Match: {r['score']:.0f}%]" if r['score'] < 100 else ""
+            formatted_results.append(f"{r['display']}{score_display} (ID: {r['id']})")
+
+        return "✅ Gefundene Datensätze:\n" + "\n".join(formatted_results)
 
     def create_contact(self, name: str, email: str, phone: Optional[str] = None) -> str:
         parts = name.split(" ", 1)

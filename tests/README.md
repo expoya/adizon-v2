@@ -189,6 +189,7 @@ echo "OPENROUTER_API_KEY=your_key" >> .env
 | `test_undo.py` | ✅ | 6/6 | Undo System | Multi-User Safety |
 | `test_agent_config.py` | ✅ | 7/7 | YAML Config | Alle 4 Agents |
 | `test_crm_adapter.py` | ✅ | 8/8 | CRM Interface | Mock-basiert |
+| `test_fuzzy_search.py` | 🆕 | 16/16 | Fuzzy-Matching | Voice-Ready Search |
 
 ---
 
@@ -264,6 +265,66 @@ python tests/test_crm_adapter.py
 ```
 📊 Ergebnis: 8/8 Tests bestanden
 ✅ Bereit für CRM-Wechsel
+```
+
+---
+
+### 9. `test_fuzzy_search.py` - Fuzzy-Matching Engine 🆕 ✅
+
+**Zweck:** Voice-Ready Tippfehler-tolerante Suche
+
+**Testet:**
+- `_fuzzy_match()` Kern-Funktion (8 Unit Tests)
+  - Exakte Matches (100% Score)
+  - Tippfehler-Toleranz ("Tomas" → "Thomas" = 92%)
+  - Wort-Reihenfolge ("Braun Thomas" = "Thomas Braun")
+  - Partial Matches ("Thomas" in "Thomas Braun")
+  - Case-Insensitivity
+  - Below-Threshold Rejection
+  - Empty String Handling
+  - Custom Thresholds
+- `_resolve_target_id()` mit Fuzzy (4 Integration Tests)
+  - Fuzzy Name-Match
+  - Fuzzy Email-Match
+  - Best-Match-Wins Logik
+  - No-Match Fallback
+- `search_contacts()` mit Scoring (3 Integration Tests)
+  - Fuzzy Person-Search
+  - Score-basierte Sortierung
+  - Fuzzy Company-Search
+- Performance Test (1 Test)
+  - 1000 Matches in <100ms
+- Edge Cases (2 Tests)
+  - Sonderzeichen (Umlaute, Bindestriche)
+  - Sehr lange Strings
+
+**Ausführen:**
+```bash
+# Installation
+pip install rapidfuzz
+
+# Tests ausführen
+python tests/test_fuzzy_search.py
+
+# Oder via pytest
+pytest tests/test_fuzzy_search.py -v
+```
+
+**Erwartete Ausgabe:**
+```
+🧪 Running Fuzzy-Search Tests...
+✅ rapidfuzz ist installiert
+
+==================== 16 passed in 0.15s ====================
+📊 Ergebnis: 16/16 Tests bestanden
+✅ Voice-Ready Search validiert
+⚡ Performance: <0.1ms pro Match
+```
+
+**Dependency:**
+```bash
+# Benötigt rapidfuzz (bereits in requirements.txt)
+pip install rapidfuzz==3.10.1
 ```
 
 ---
