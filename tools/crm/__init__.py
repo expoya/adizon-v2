@@ -36,6 +36,7 @@ search_func = mock_search
 create_contact_func = mock_create
 create_task_func = mock_task
 create_note_func = mock_note
+update_entity_func = None  # Nur im Live-Modus verfügbar
 
 if crm_system == "TWENTY":
     from .twenty_adapter import TwentyCRM
@@ -45,6 +46,7 @@ if crm_system == "TWENTY":
         create_contact_func = adapter.create_contact
         create_task_func = adapter.create_task
         create_note_func = adapter.create_note
+        update_entity_func = adapter.update_entity  # Neues Tool
         print("✅ Twenty Adapter connected")
     except Exception as e:
         print(f"❌ Adapter Error: {e}")
@@ -103,12 +105,58 @@ def get_crm_tools_for_user(user_id: str) -> list:
         res = adapter.delete_item(typ, iid)
         if "✅" in res: clear_undo_context(user_id)
         return res
+    
+    def update_entity_wrapper(target: str, entity_type: str, **fields) -> str:
+        """
+        Aktualisiert Felder eines CRM-Eintrags (Person oder Company).
+        
+        Args:
+            target: Name, Email oder UUID des Eintrags
+            entity_type: "person" oder "company"
+            **fields: Beliebige Felder als Keyword-Arguments
+            
+        Verfügbare Felder:
+        
+        Person:
+            - job: Position/Job Title (z.B. "CEO", "Head of Sales")
+            - linkedin: LinkedIn Profil URL (muss linkedin.com enthalten)
+            - city: Wohnort/Stadt
+            - birthday: Geburtstag (Format: YYYY-MM-DD)
+        
+        Company:
+            - website: Firmen-Website (https:// wird automatisch ergänzt)
+            - size: Anzahl Mitarbeiter (Zahl)
+            - industry: Branche (z.B. "Solar", "IT")
+            - address: Vollständige Firmenadresse
+            - roof_area: [CUSTOM] Dachfläche in m² (nur für Voltage Solutions)
+        
+        Beispiele:
+            update_entity("Thomas Braun", "person", job="CEO", linkedin="linkedin.com/in/thomas")
+            update_entity("Expoya", "company", website="expoya.com", size=50, industry="Solar")
+        """
+        if not update_entity_func:
+            return "❌ Update-Feature nicht verfügbar (nur im Live-Modus mit CRM-Adapter)."
+        
+        # Konvertiere kwargs zu dict für Adapter
+        return update_entity_func(target, entity_type, fields)
 
     # 3. Liste zurückgeben
-    return [
-        StructuredTool.from_function(search_func, name="search_contacts", description="Sucht Kontakte"),
-        StructuredTool.from_function(create_contact_wrapper, name="create_contact", description="Erstellt Kontakt"),
-        StructuredTool.from_function(create_task_wrapper, name="create_task", description="Erstellt Task (Datum ISO)"),
+    tools = [
+        StructuredTool.from_function(search_func, name="search_contacts", description="Sucht Kontakte und Firmen im CRM"),
+        StructuredTool.from_function(create_contact_wrapper, name="create_contact", description="Erstellt neuen Kontakt"),
+        StructuredTool.from_function(create_task_wrapper, name="create_task", description="Erstellt Task (Datum im ISO-Format)"),
         StructuredTool.from_function(create_note_wrapper, name="create_note", description="Erstellt Notiz"),
-        StructuredTool.from_function(undo_wrapper, name="undo_last_action", description="Macht die letzte Erstellung RÜCKGÄNGIG (Löschen).")
+        StructuredTool.from_function(undo_wrapper, name="undo_last_action", description="Macht die letzte Erstellung RÜCKGÄNGIG")
     ]
+    
+    # Update-Tool nur hinzufügen, wenn verfügbar
+    if update_entity_func:
+        tools.append(
+            StructuredTool.from_function(
+                update_entity_wrapper, 
+                name="update_entity",
+                description="Aktualisiert Felder eines CRM-Eintrags (Person: job, linkedin, city, birthday | Company: website, size, industry, address)"
+            )
+        )
+    
+    return tools

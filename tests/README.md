@@ -354,6 +354,22 @@ pip install rapidfuzz==3.10.1
 - Validiert Payload-Struktur
 - Testet Error-Handling
 
+### `test_field_enrichment.py` 🆕
+**Was:** Dynamic Field Enrichment Feature
+- Field Mapping Loader (YAML-basiert)
+- Field Validation & Auto-Fix
+- update_entity() Integration
+- Custom Fields Support
+
+**Kategorien:**
+1. Field Mapping Loader (8 Tests)
+2. Field Validation (7 Tests)
+3. Adapter Integration - Mock (6 Tests)
+4. Tool Factory (2 Tests)
+5. Full Integration (3 Tests)
+
+**Total:** 26 Tests
+
 ---
 
 ## 📝 Best Practices

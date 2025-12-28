@@ -1,0 +1,143 @@
+# Twenty CRM Field Mapping
+# Definiert, welche Felder Adizon befüllen darf (Whitelist-Prinzip)
+
+crm_system: "twenty"
+version: "1.0"
+description: "Field Mapping für Twenty CRM - Production Ready"
+last_updated: "2025-12-28"
+
+# === WHITELIST: Welche Felder darf Adizon befüllen? ===
+
+entities:
+  person:
+    description: "Kontakte / Ansprechpartner"
+    endpoint: "people"
+    fields:
+      # Format: generic_name → CRM-spezifisches Mapping
+      
+      job:
+        crm_field: "jobTitle"
+        type: "string"
+        description: "Position/Job Title des Kontakts"
+        required: false
+        example: "Head of Sales"
+        llm_hint: "z.B. 'CEO', 'Vertriebsleiter', 'Head of Marketing'"
+      
+      linkedin:
+        crm_field: "linkedIn"
+        type: "url"
+        description: "LinkedIn Profil URL"
+        required: false
+        validation: "linkedin.com"
+        example: "https://linkedin.com/in/max-mustermann"
+        llm_hint: "Muss linkedin.com enthalten"
+      
+      city:
+        crm_field: "city"
+        type: "string"
+        description: "Wohnort / Stadt"
+        required: false
+        example: "Wien"
+        llm_hint: "Stadtname"
+      
+      birthday:
+        crm_field: "birthday"
+        type: "date"
+        description: "Geburtstag"
+        required: false
+        format: "YYYY-MM-DD"
+        example: "1990-05-15"
+        llm_hint: "Format: YYYY-MM-DD"
+
+  company:
+    description: "Firmen / Accounts"
+    endpoint: "companies"
+    fields:
+      
+      website:
+        crm_field: "domainName"
+        type: "url"
+        description: "Firmen-Website / Domain"
+        required: false
+        validation: "url"
+        auto_fix: true
+        example: "https://expoya.com"
+        llm_hint: "URL der Firmen-Website (https:// wird automatisch ergänzt)"
+      
+      size:
+        crm_field: "employees"
+        type: "number"
+        description: "Anzahl Mitarbeiter"
+        required: false
+        min: 1
+        example: 50
+        llm_hint: "Anzahl der Mitarbeiter als Zahl"
+      
+      industry:
+        crm_field: "idealCustomerProfile"
+        type: "string"
+        description: "Branche / Ideal Customer Profile"
+        required: false
+        example: "Solar"
+        llm_hint: "z.B. 'Solar', 'IT', 'Maschinenbau'"
+      
+      address:
+        crm_field: "address"
+        type: "string"
+        description: "Firmenadresse (vollständig)"
+        required: false
+        example: "Hauptstraße 1, 1010 Wien, Österreich"
+        llm_hint: "Vollständige Adresse mit PLZ und Stadt"
+      
+      # === CUSTOM FIELD BEISPIEL ===
+      # Voltage Solutions: Solaranlagen-Verkauf
+      roof_area:
+        crm_field: "customField_roofArea"
+        type: "number"
+        unit: "m²"
+        description: "Verfügbare Dachfläche für Solaranlagen"
+        required: false
+        custom: true
+        customer: "voltage_solutions"
+        example: 150
+        llm_hint: "Dachfläche in Quadratmetern (nur Zahl, ohne Einheit)"
+
+# === VALIDATION RULES ===
+validation:
+  url:
+    pattern: "^https?://"
+    auto_fix: true
+    fix_action: "Ergänzt https:// wenn fehlt"
+  
+  linkedin:
+    pattern: "linkedin.com"
+    message: "Muss eine LinkedIn URL sein (linkedin.com)"
+  
+  email:
+    pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+    message: "Ungültiges Email-Format"
+  
+  date:
+    format: "YYYY-MM-DD"
+    message: "Datum muss im Format YYYY-MM-DD sein (z.B. 2025-12-28)"
+  
+  number:
+    type: "integer"
+    message: "Muss eine ganze Zahl sein"
+
+# === RELATIONSHIPS (für zukünftige Erweiterung) ===
+relationships:
+  person_to_company:
+    enabled: false
+    field: "companyId"
+    description: "Verknüpft Person mit Firma"
+    note: "Noch nicht implementiert - für Phase 2"
+
+# === NOTES ===
+notes: |
+  - Alle Felder sind optional (required: false)
+  - Custom Fields müssen mit 'custom: true' markiert sein
+  - Validation wird automatisch durchgeführt
+  - Auto-Fix korrigiert Werte automatisch (z.B. URLs)
+  - LLM-Hints werden in System-Prompts verwendet
+

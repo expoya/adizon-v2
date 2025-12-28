@@ -1,6 +1,6 @@
 """
 Twenty CRM Adapter - PRODUCTION GRADE
-Strict Filtering, Real Relations, Scalable, Fuzzy-Search.
+Strict Filtering, Real Relations, Scalable, Fuzzy-Search, Dynamic Field Enrichment.
 """
 import os
 import requests
@@ -8,6 +8,7 @@ import json
 import traceback
 from typing import Optional, Dict, List, Tuple
 from rapidfuzz import fuzz
+from .field_mapping_loader import load_field_mapping
 
 class TwentyCRM:
     def __init__(self):
@@ -28,6 +29,16 @@ class TwentyCRM:
             "Content-Type": "application/json",
             "Accept": "application/json"
         }
+        
+        # Field Mapping Loader
+        try:
+            self.field_mapper = load_field_mapping("twenty")
+            field_count = sum(len(self.field_mapper.get_allowed_fields(e)) for e in self.field_mapper.get_entities())
+            print(f"✅ Field Mapping loaded: {field_count} fields across {len(self.field_mapper.get_entities())} entities")
+        except Exception as e:
+            print(f"⚠️ Field Mapping konnte nicht geladen werden: {e}")
+            self.field_mapper = None
+        
         print(f"🔗 Twenty Production-Adapter connected to: {self.base_url}")
 
     def _fuzzy_match(self, query: str, target: str, threshold: int = 70) -> Tuple[bool, float]:
@@ -91,13 +102,19 @@ class TwentyCRM:
             print(f"❌ Network Error at {endpoint}: {e}")
             return None
 
-    def _resolve_target_id(self, target: str) -> Optional[str]:
+    def _resolve_target_id(self, target: str, entity_type: str = "person") -> Optional[str]:
         """
         Sucht intelligent nach UUIDs mit Fuzzy-Matching.
+        Unterstützt: People und Companies
+        
         Strategie:
         1. Ist es schon eine UUID? -> Return.
-        2. Ist es eine E-Mail (@)? -> Fuzzy-Suche nach E-Mail.
+        2. Ist es eine E-Mail (@)? -> Fuzzy-Suche nach E-Mail (nur bei person).
         3. Ist es ein Name? -> Fuzzy-Suche nach Namen (sortiert nach Score).
+        
+        Args:
+            target: Name, Email oder UUID
+            entity_type: "person" oder "company"
         """
         if not target: return None
         target = target.strip()
@@ -106,41 +123,74 @@ class TwentyCRM:
         if len(target) > 20 and " " not in target and "@" not in target:
             return target  # Wir vertrauen, dass es eine ID ist
 
-        print(f"🔍 Fuzzy-Resolve UUID für: '{target}'...")
+        print(f"🔍 Fuzzy-Resolve UUID für {entity_type}: '{target}'...")
         
         try:
-            # Wir laden etwas mehr Daten für den Abgleich
-            data = self._request("GET", "people", params={"limit": 500}) or {}
-            people = data.get('people', [])
+            # Endpoint basierend auf entity_type
+            if entity_type == "company":
+                endpoint = "companies"
+                data = self._request("GET", endpoint, params={"limit": 200}) or {}
+                items = data.get('companies', [])
+            else:  # person
+                endpoint = "people"
+                data = self._request("GET", endpoint, params={"limit": 500}) or {}
+                items = data.get('people', [])
             
             # Kandidaten mit Scores sammeln
             candidates = []
             
             # 2. Suche mit Fuzzy-Matching
-            for p in people:
-                pid = p.get('id')
+            for item in items:
+                item_id = item.get('id')
                 
-                # A) E-Mail Match
-                if "@" in target:
-                    emails = p.get('emails') or []
-                    p_mail = ""
-                    if isinstance(emails, list) and emails: p_mail = emails[0].get('primaryEmail', '')
-                    elif isinstance(emails, dict): p_mail = emails.get('primaryEmail', '')
+                if entity_type == "company":
+                    # Company: Nur nach Name suchen
+                    company_name = item.get('name', '').strip()
                     
-                    if p_mail:
-                        is_match, score = self._fuzzy_match(target, p_mail, threshold=80)
+                    if company_name:
+                        is_match, score = self._fuzzy_match(target, company_name, threshold=70)
                         if is_match:
-                            candidates.append({'id': pid, 'score': score, 'matched': p_mail, 'type': 'email'})
+                            candidates.append({
+                                'id': item_id, 
+                                'score': score, 
+                                'matched': company_name, 
+                                'type': 'company_name'
+                            })
+                
+                else:  # person
+                    # A) E-Mail Match
+                    if "@" in target:
+                        emails = item.get('emails') or []
+                        p_mail = ""
+                        if isinstance(emails, list) and emails: 
+                            p_mail = emails[0].get('primaryEmail', '')
+                        elif isinstance(emails, dict): 
+                            p_mail = emails.get('primaryEmail', '')
+                        
+                        if p_mail:
+                            is_match, score = self._fuzzy_match(target, p_mail, threshold=80)
+                            if is_match:
+                                candidates.append({
+                                    'id': item_id, 
+                                    'score': score, 
+                                    'matched': p_mail, 
+                                    'type': 'email'
+                                })
 
-                # B) Name Match (Fuzzy)
-                else:
-                    name_obj = p.get('name') or {}
-                    full_name = f"{name_obj.get('firstName', '')} {name_obj.get('lastName', '')}".strip()
-                    
-                    if full_name:
-                        is_match, score = self._fuzzy_match(target, full_name, threshold=70)
-                        if is_match:
-                            candidates.append({'id': pid, 'score': score, 'matched': full_name, 'type': 'name'})
+                    # B) Name Match (Fuzzy)
+                    else:
+                        name_obj = item.get('name') or {}
+                        full_name = f"{name_obj.get('firstName', '')} {name_obj.get('lastName', '')}".strip()
+                        
+                        if full_name:
+                            is_match, score = self._fuzzy_match(target, full_name, threshold=70)
+                            if is_match:
+                                candidates.append({
+                                    'id': item_id, 
+                                    'score': score, 
+                                    'matched': full_name, 
+                                    'type': 'person_name'
+                                })
             
             # 3. Besten Kandidaten wählen (höchster Score)
             if candidates:
@@ -148,7 +198,7 @@ class TwentyCRM:
                 print(f"✅ UUID gefunden (via {best['type']} '{best['matched']}', Score: {best['score']:.0f}%): {best['id']}")
                 return best['id']
             
-            print(f"⚠️ Nichts gefunden für '{target}' in den letzten 500 Kontakten.")
+            print(f"⚠️ Nichts gefunden für '{target}' im {entity_type}-Index.")
             return None
             
         except Exception as e:
@@ -282,7 +332,7 @@ class TwentyCRM:
         
         # --- PHASE 0: ID REPARATUR (Self-Healing) ---
         # Wenn der Agent eine Email statt einer UUID sendet, fixen wir das hier.
-        real_target_id = self._resolve_target_id(target_id)
+        real_target_id = self._resolve_target_id(target_id, entity_type="person")
 
         # --- PHASE 1: TASK ERSTELLEN ---
         payload = {
@@ -336,7 +386,7 @@ class TwentyCRM:
         print(f"📝 Twenty: Erstelle Notiz '{title}' für Target '{target_id}'...")
 
         # --- PHASE 0: ID REPARATUR ---
-        real_target_id = self._resolve_target_id(target_id)
+        real_target_id = self._resolve_target_id(target_id, entity_type="person")
 
         # --- PHASE 1: NOTIZ ERSTELLEN ---
         # Hier ist die Änderung: Wir nutzen den Titel vom LLM!
@@ -373,6 +423,96 @@ class TwentyCRM:
                 except: pass
 
         return output
+
+    # --- DYNAMIC FIELD ENRICHMENT ---
+    def update_entity(self, target: str, entity_type: str, fields: dict) -> str:
+        """
+        Aktualisiert beliebige Felder eines CRM-Eintrags (Dynamic Field Enrichment).
+        
+        Features:
+        - Whitelist-basiert: Nur erlaubte Felder werden akzeptiert
+        - Field Mapping: Generic Names → CRM-spezifische Namen
+        - Validation: Type-Checking + Auto-Fix
+        - Self-Healing: Name/Email → UUID Resolution
+        
+        Args:
+            target: Name, Email oder UUID des Eintrags
+            entity_type: "person" oder "company"
+            fields: Dict mit generic field names, z.B. {"website": "expoya.com", "size": 50}
+            
+        Returns:
+            Bestätigung mit aktualisierten Feldern
+            
+        Example:
+            update_entity("Expoya", "company", {"website": "expoya.com", "size": 50})
+            update_entity("Thomas Braun", "person", {"job": "CEO", "linkedin": "linkedin.com/in/thomas"})
+        """
+        print(f"📝 Update {entity_type}: '{target}' with {fields}")
+        
+        # 0. Field Mapper Check
+        if not self.field_mapper:
+            return "❌ Field Mapping nicht verfügbar. Feature deaktiviert."
+        
+        # 1. Target-ID auflösen (Self-Healing)
+        entity_id = self._resolve_target_id(target, entity_type=entity_type)
+        
+        if not entity_id:
+            return f"❌ {entity_type.title()} '{target}' nicht gefunden im CRM."
+        
+        # 2. Felder validieren und mappen (nur Whitelist + Auto-Fix)
+        validated_fields = {}
+        skipped_fields = []
+        
+        for field_name, value in fields.items():
+            # Prüfe ob Feld in Whitelist
+            if not self.field_mapper.is_field_allowed(entity_type, field_name):
+                print(f"⚠️ Feld '{field_name}' nicht in Whitelist für {entity_type} (übersprungen)")
+                skipped_fields.append(field_name)
+                continue
+            
+            # Validiere & Auto-Fix
+            is_valid, corrected_value, error = self.field_mapper.validate_field(
+                entity_type, field_name, value
+            )
+            
+            if not is_valid:
+                print(f"⚠️ Validation failed für '{field_name}': {error}")
+                skipped_fields.append(field_name)
+                continue
+            
+            # Mappe zu CRM-spezifischem Feldnamen
+            crm_field = self.field_mapper.get_crm_field_name(entity_type, field_name)
+            if crm_field:
+                validated_fields[crm_field] = corrected_value
+        
+        # 3. Check: Wurden Felder validiert?
+        if not validated_fields:
+            if skipped_fields:
+                return f"⚠️ Keine gültigen Felder zum Aktualisieren. Übersprungen: {', '.join(skipped_fields)}"
+            else:
+                return f"⚠️ Keine Felder zum Aktualisieren übergeben."
+        
+        print(f"🔄 Mapped & Validated: {validated_fields}")
+        
+        # 4. API Call (PATCH)
+        endpoint = self.field_mapper.get_endpoint(entity_type)
+        data = self._request("PATCH", f"{endpoint}/{entity_id}", data=validated_fields)
+        
+        if not data:
+            return f"❌ Fehler beim Aktualisieren von {entity_type}."
+        
+        # 5. Response formatieren
+        updated_list = []
+        for field_name, value in fields.items():
+            if field_name not in skipped_fields:
+                updated_list.append(f"{field_name}: {value}")
+        
+        response = f"✅ {entity_type.title()} aktualisiert: {', '.join(updated_list)}"
+        
+        if skipped_fields:
+            response += f"\n⚠️ Übersprungen: {', '.join(skipped_fields)}"
+        
+        return response
 
     # Generische Lösch-Funktion
     def delete_item(self, item_type: str, item_id: str) -> str:

@@ -2,8 +2,8 @@
 # Verantwortlich für: Business Logic, CRM-Operationen, Tool-Calling
 
 name: "CRM Handler"
-description: "Business Logic Agent mit Tool-Calling für Kontakte, Tasks und Notizen"
-version: "2.1"
+description: "Business Logic Agent mit Tool-Calling für Kontakte, Tasks, Notizen und Dynamic Field Enrichment"
+version: "2.2"
 
 # LLM Configuration
 model:
@@ -59,10 +59,70 @@ system_prompt: |
   **UNDO:**
   - Nutze 'undo_last_action' nur auf expliziten Wunsch ("Rückgängig", "Fehler")
 
+  === DYNAMIC FIELD ENRICHMENT (NEU) ===
+
+  Du kannst jetzt ALLE CRM-Felder befüllen, nicht nur Name/Email/Phone!
+
+  **VERFÜGBARE FELDER:**
+
+  **PERSON (Kontakte):**
+  - job: Position/Job Title (z.B. "CEO", "Head of Sales", "Vertriebsleiter")
+  - linkedin: LinkedIn Profil URL (muss linkedin.com enthalten)
+  - city: Wohnort/Stadt (z.B. "Wien", "Berlin")
+  - birthday: Geburtstag im Format YYYY-MM-DD (z.B. "1985-03-15")
+
+  **COMPANY (Firmen):**
+  - website: Firmen-Website (https:// wird automatisch ergänzt)
+  - size: Anzahl Mitarbeiter (nur Zahl, z.B. 50)
+  - industry: Branche/Ideal Customer Profile (z.B. "Solar", "IT", "Maschinenbau")
+  - address: Vollständige Firmenadresse mit PLZ und Stadt
+  - roof_area: [CUSTOM für Voltage Solutions] Dachfläche in m² (nur Zahl)
+
+  **WICHTIGER WORKFLOW:**
+
+  1. User sagt: "Die Firma Expoya hat die Website expoya.com und 50 Mitarbeiter"
+  2. Du: Nutze 'update_entity' Tool:
+     update_entity(target="Expoya", entity_type="company", website="expoya.com", size=50)
+
+  3. User sagt: "Thomas ist Head of Sales, LinkedIn: linkedin.com/in/thomas"
+  4. Du: update_entity(target="Thomas Braun", entity_type="person", job="Head of Sales", linkedin="linkedin.com/in/thomas")
+
+  **WICHTIGE REGELN:**
+
+  - entity_type muss IMMER "person" oder "company" sein
+  - Nutze GENERIC Feld-Namen (job, website, size - NICHT jobTitle, domainName, employees)
+  - System mapped automatisch auf CRM-spezifische Namen
+  - Bei fehlender ID: Gib einfach den Namen an (Self-Healing)
+  - Mehrere Felder gleichzeitig sind möglich und erwünscht
+  - Validation erfolgt automatisch (z.B. URLs werden korrigiert)
+  - Bei Unsicherheit: Frag nach statt zu raten!
+
+  **BEISPIELE:**
+
+  User: "Expoya ist in der Solarbranche"
+  → update_entity(target="Expoya", entity_type="company", industry="Solar")
+
+  User: "Thomas arbeitet als CEO"
+  → update_entity(target="Thomas Braun", entity_type="person", job="CEO")
+
+  User: "Die Firma hat 200 Mitarbeiter und die Website ist acme.com"
+  → update_entity(target="ACME", entity_type="company", size=200, website="acme.com")
+
+  User: "Das Gebäude hat 300 m² Dachfläche" (wenn Kontext zu Firma)
+  → update_entity(target="[Firmenname]", entity_type="company", roof_area=300)
+
+  **WANN WELCHES TOOL?**
+
+  - Neuer Kontakt? → create_contact (nur Name, Email, Phone)
+  - Zusatzinfos für existierenden Kontakt? → update_entity
+  - Neue Firma? → Erst mit create_contact anlegen, dann mit update_entity befüllen
+  - Task/Notiz? → create_task / create_note
+
   Antworte natürlich auf Deutsch. Du duzt den User.
 
 # Changelog
 changelog:
+  - "2.2: Dynamic Field Enrichment - update_entity Tool für alle CRM-Felder"
   - "2.1: Workflow-Anweisungen für automatische Verknüpfungen hinzugefügt"
   - "2.0: Undo-Funktion und Self-Healing integriert"
   - "1.0: Initial Release"
