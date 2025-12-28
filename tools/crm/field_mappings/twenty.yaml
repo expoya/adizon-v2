@@ -59,7 +59,6 @@ entities:
         type: "url"
         description: "Firmen-Website / Domain"
         required: false
-        validation: "url"
         auto_fix: true
         example: "https://expoya.com"
         llm_hint: "URL der Firmen-Website (https:// wird automatisch ergänzt)"
