@@ -131,8 +131,8 @@ def get_crm_tools_for_user(user_id: str) -> list:
             - roof_area: [CUSTOM] Dachfläche in m² (nur für Voltage Solutions)
         
         Beispiele:
-            update_entity("Thomas Braun", "person", '{"job": "CEO", "linkedin": "linkedin.com/in/thomas"}')
-            update_entity("Expoya", "company", '{"website": "expoya.com", "size": 50, "industry": "Solar"}')
+            update_entity("Thomas Braun", "person", '{{"job": "CEO", "linkedin": "linkedin.com/in/thomas"}}')
+            update_entity("Expoya", "company", '{{"website": "expoya.com", "size": 50, "industry": "Solar"}}')
         """
         if not update_entity_func:
             return "❌ Update-Feature nicht verfügbar (nur im Live-Modus mit CRM-Adapter)."

@@ -49,10 +49,22 @@ def get_conversation_memory(user_id: str, session_id: str = "main") -> Conversat
     return memory
 
 def set_session_state(user_id: str, state: str):
-    """Setzt den Sessions-State"""
+    """
+    Setzt den Sessions-State mit automatischem Timeout.
+    
+    ACTIVE State: 10 Minuten TTL (Auto-Logout bei Inaktivität)
+    IDLE State: 24 Stunden TTL
+    """
     key = f"adizon:state:{user_id}"
-    redis_client.set(key, state)
-    print(f"🧠 State set for {user_id}: {state}")
+    
+    if state == "ACTIVE":
+        # 10 Minuten Timeout für aktive Sessions
+        redis_client.set(key, state, ex=600)
+        print(f"🧠 State set for {user_id}: {state} (TTL: 10 Min)")
+    else:
+        # 24 Stunden für IDLE State
+        redis_client.set(key, state, ex=86400)
+        print(f"🧠 State set for {user_id}: {state}")
 
 def get_session_state(user_id: str) -> str:
     """Holt den Status (Default: IDLE)"""
