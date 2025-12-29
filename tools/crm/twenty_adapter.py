@@ -224,26 +224,41 @@ class TwentyCRM:
             if not response:
                 return f"❌ Person mit ID {person_id} nicht gefunden."
             
-            person = response if isinstance(response, dict) else response.get("person", {})
+            # Twenty gibt zurück: {"person": {...}} wenn _request data.person zurückgibt
+            # Oder direkt {...} wenn _request nur data zurückgibt
+            # Wir müssen beide Fälle abdecken
+            person = response.get("person", response) if isinstance(response, dict) else response
             
-            # Extract wichtige Felder
-            first_name = person.get("nameFirstName", "")
-            last_name = person.get("nameLastName", "")
+            # Extract wichtige Felder (Twenty Schema: nested objects!)
+            name_obj = person.get("name", {})
+            first_name = name_obj.get("firstName", "") if isinstance(name_obj, dict) else ""
+            last_name = name_obj.get("lastName", "") if isinstance(name_obj, dict) else ""
             full_name = f"{first_name} {last_name}".strip()
             
             # Contact Info
             emails_obj = person.get("emails", {})
-            email = emails_obj.get("primaryEmail", "") if emails_obj else ""
+            email = emails_obj.get("primaryEmail", "") if isinstance(emails_obj, dict) else ""
             
             phones_obj = person.get("phones", {})
-            phone = phones_obj.get("primaryPhoneNumber", "") if phones_obj else ""
+            phone = ""
+            if isinstance(phones_obj, dict):
+                phone_number = phones_obj.get("primaryPhoneNumber", "")
+                phone_country = phones_obj.get("primaryPhoneCountryCode", "")
+                phone_calling = phones_obj.get("primaryPhoneCallingCode", "")
+                
+                # Format Phone Number
+                if phone_number:
+                    if phone_calling:
+                        phone = f"{phone_calling} {phone_number}"
+                    else:
+                        phone = phone_number
             
             # Job Info
             job_title = person.get("jobTitle", "")
             
             # Social
             linkedin_obj = person.get("linkedinLink", {})
-            linkedin = linkedin_obj.get("primaryLinkUrl", "") if linkedin_obj else ""
+            linkedin = linkedin_obj.get("primaryLinkUrl", "") if isinstance(linkedin_obj, dict) else ""
             
             # Location
             city = person.get("city", "")
@@ -257,7 +272,9 @@ class TwentyCRM:
             if company_id:
                 company_data = self._request("GET", f"companies/{company_id}")
                 if company_data:
-                    company_name = company_data.get("name", "")
+                    # Company könnte auch nested sein
+                    comp = company_data.get("company", company_data) if isinstance(company_data, dict) else company_data
+                    company_name = comp.get("name", "") if isinstance(comp, dict) else ""
             
             # Created/Updated
             created_at = person.get("createdAt", "")
