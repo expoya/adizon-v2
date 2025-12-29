@@ -7,9 +7,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
 from openai import OpenAI
 import os
@@ -25,17 +24,6 @@ from tools.chat.slack_adapter import handle_slack_challenge
 
 # User-Management
 from middleware.auth import AuthMiddleware
-
-# HTTPS Redirect Fix Middleware
-class HTTPSRedirectMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        # Fix redirects to use HTTPS instead of HTTP
-        if response.status_code in (301, 302, 303, 307, 308):
-            location = response.headers.get("location", "")
-            if location.startswith("http://"):
-                response.headers["location"] = location.replace("http://", "https://", 1)
-        return response
 from utils.database import SessionLocal
 from repositories.user_repository import UserRepository
 from services.registration_service import RegistrationService
@@ -49,13 +37,8 @@ from api import users_router
 app = FastAPI(
     title="Adizon",
     description="AI Assistant für KMUs - Multi-Platform Chat Adapter with User-Management",
-    version="4.0.0",
-    # Disable automatic slash redirect to avoid HTTP downgrade
-    redirect_slashes=False
+    version="4.0.0"
 )
-
-# HTTPS Redirect Fix (must be first!)
-app.add_middleware(HTTPSRedirectMiddleware)
 
 # CORS Configuration (für React Frontend)
 app.add_middleware(
