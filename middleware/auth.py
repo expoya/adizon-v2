@@ -62,7 +62,15 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         
         # Extrahiere Platform & User-ID
-        platform = request.path_params.get("platform")
+        # WICHTIG: request.path_params existiert in Middleware noch nicht!
+        # Wir müssen Platform aus dem URL-Path parsen
+        path = request.url.path  # z.B. "/webhook/slack"
+        platform = None
+        if path.startswith("/webhook/"):
+            platform = path.split("/")[2] if len(path.split("/")) > 2 else None
+        
+        print(f"🔎 Auth Middleware: Extracting platform from path: {path} → {platform}")
+        
         user_info = self._extract_user_info(platform, webhook_data)
         
         if not user_info:
