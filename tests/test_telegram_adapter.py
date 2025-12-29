@@ -170,6 +170,34 @@ def test_telegram_adapter_init_without_token():
     print("✅ Init Error (no token)")
 
 
+# === Update ID Tests (for Deduplication) ===
+
+def test_parse_telegram_webhook_with_update_id():
+    """Test: update_id wird aus Webhook extrahiert (für Deduplication)"""
+    
+    with patch.dict('os.environ', {'TELEGRAM_BOT_TOKEN': 'test_token'}):
+        adapter = TelegramAdapter()
+    
+    webhook_data = {
+        "update_id": 861843155,
+        "message": {
+            "chat": {"id": 123456},
+            "from": {
+                "id": 789012,
+                "first_name": "Max"
+            },
+            "text": "Test"
+        }
+    }
+    
+    msg = adapter.parse_incoming(webhook_data)
+    
+    # update_id sollte im raw_data enthalten sein
+    assert msg.raw_data["update_id"] == 861843155
+    
+    print("✅ Parse with update_id")
+
+
 # === Run All Tests ===
 
 if __name__ == "__main__":
@@ -183,7 +211,8 @@ if __name__ == "__main__":
     test_send_telegram_message_error()
     test_get_platform_name()
     test_telegram_adapter_init_without_token()
+    test_parse_telegram_webhook_with_update_id()
     
-    print("\n📊 Ergebnis: 8/8 Tests bestanden ✅")
+    print("\n📊 Ergebnis: 9/9 Tests bestanden ✅")
     print("✅ Telegram Adapter validiert\n")
 

@@ -102,6 +102,56 @@ def test_parse_slack_webhook_missing_user():
     print("✅ Parse Error (missing user)")
 
 
+def test_parse_slack_webhook_message_changed():
+    """Test: message_changed Subtype wird ignoriert"""
+    
+    with patch.dict('os.environ', {'SLACK_BOT_TOKEN': 'xoxb-test'}):
+        adapter = SlackAdapter()
+    
+    webhook_data = {
+        "type": "event_callback",
+        "event": {
+            "type": "message",
+            "subtype": "message_changed",
+            "message": {
+                "text": "Edited message",
+                "user": "U123456"
+            },
+            "channel": "C123456"
+        }
+    }
+    
+    with pytest.raises(WebhookParseError, match="Ignoring Slack subtype: message_changed"):
+        adapter.parse_incoming(webhook_data)
+    
+    print("✅ Ignore message_changed Subtype")
+
+
+def test_parse_slack_webhook_bot_profile():
+    """Test: Bot Messages mit bot_profile werden ignoriert"""
+    
+    with patch.dict('os.environ', {'SLACK_BOT_TOKEN': 'xoxb-test'}):
+        adapter = SlackAdapter()
+    
+    webhook_data = {
+        "type": "event_callback",
+        "event": {
+            "type": "message",
+            "bot_profile": {
+                "id": "B123456",
+                "name": "Test Bot"
+            },
+            "text": "Bot message",
+            "channel": "C123456"
+        }
+    }
+    
+    with pytest.raises(WebhookParseError, match="Ignoring bot message"):
+        adapter.parse_incoming(webhook_data)
+    
+    print("✅ Ignore bot_profile Messages")
+
+
 # === Send Message Tests ===
 
 @patch('tools.chat.slack_adapter.requests.post')
@@ -211,6 +261,8 @@ if __name__ == "__main__":
     test_parse_slack_challenge()
     test_parse_slack_webhook_bot_message()
     test_parse_slack_webhook_missing_user()
+    test_parse_slack_webhook_message_changed()
+    test_parse_slack_webhook_bot_profile()
     test_send_slack_message()
     test_send_slack_message_api_error()
     test_handle_slack_challenge()
@@ -218,6 +270,6 @@ if __name__ == "__main__":
     test_get_platform_name()
     test_slack_adapter_init_without_token()
     
-    print("\n📊 Ergebnis: 10/10 Tests bestanden ✅")
+    print("\n📊 Ergebnis: 12/12 Tests bestanden ✅")
     print("✅ Slack Adapter validiert\n")
 

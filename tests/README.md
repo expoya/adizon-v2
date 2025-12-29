@@ -191,11 +191,15 @@ echo "OPENROUTER_API_KEY=your_key" >> .env
 | `test_crm_adapter.py` | ✅ | 8/8 | CRM Interface | Mock-basiert |
 | `test_fuzzy_search.py` | ✅ | 16/16 | Fuzzy-Matching | Voice-Ready Search |
 | `test_chat_interface.py` | 🆕 | 8/8 | Chat Interface | StandardMessage |
-| `test_telegram_adapter.py` | 🆕 | 8/8 | Telegram | Parse & Send |
-| `test_slack_adapter.py` | 🆕 | 10/10 | Slack | Parse & Send |
+| `test_telegram_adapter.py` | 🆕 | 9/9 | Telegram | Parse & Send & Dedup |
+| `test_slack_adapter.py` | 🆕 | 12/12 | Slack | Parse & Send & Dedup |
 | `test_chat_factory.py` | 🆕 | 10/10 | Chat Factory | Multi-Platform |
+| `test_unified_webhook.py` | 🆕 | 7/7 | Webhook | Deduplication |
+| `test_get_contact_details.py` | 🆕 | 10/10 | CRM Details | Zoho & Twenty |
+| `test_zoho_get_details.py` | 🆕 | 3/3 | Zoho Details | Phone, Custom Fields |
+| `test_twenty_get_details.py` | 🆕 | 4/4 | Twenty Details | Nested Schema |
 
-**Total:** 118 Tests (82 → 118, +36 durch Chat-Adapter System)
+**Total:** 151 Tests (82 → 151, +69 durch Chat-Adapter + get_contact_details)
 
 ---
 
@@ -418,7 +422,96 @@ python tests/test_chat_factory.py
 **Run All Chat Tests:**
 ```bash
 pytest tests/test_chat_*.py -v
-# → 36/36 Tests bestanden ✅
+# → 38/38 Tests bestanden ✅
+```
+
+---
+
+## 🆕 Phase 3 Tests (29.12.2025)
+
+### 14. `test_unified_webhook.py` - Unified Webhook & Deduplication 🆕 ✅
+
+**Zweck:** Validiert Webhook Deduplication für Telegram und Slack
+
+**Testet:**
+- Telegram update_id Deduplication (First + Duplicate)
+- Slack event_id Deduplication (First + Duplicate)
+- Unknown Platform Error Handling
+- WebhookParseError returns 200 OK (not 400)
+- Slack Challenge Response
+
+**Ausführen:**
+```bash
+pytest tests/test_unified_webhook.py -v
+# → 7/7 Tests bestanden ✅
+```
+
+**Why:** Verhindert doppelte Verarbeitung bei Webhook-Retries
+
+---
+
+### 15. `test_get_contact_details.py` - CRM get_contact_details Tool 🆕 ✅
+
+**Zweck:** Validiert neues Tool für detaillierte Kontakt-Abfragen
+
+**Testet:**
+- Factory Integration (Zoho + Twenty)
+- Erfolgreiche Detail-Abfrage (alle Felder)
+- Contact nicht gefunden (Error Handling)
+- Mock Mode (Tool nicht verfügbar)
+- Workflow: search_contacts → get_contact_details
+
+**Ausführen:**
+```bash
+pytest tests/test_get_contact_details.py -v
+# → 10/10 Tests bestanden ✅
+```
+
+**Why:** Erlaubt Abfrage von Phone, Birthday, Custom Fields, etc.
+
+---
+
+### 16. `test_zoho_get_details.py` - Zoho get_lead_details 🆕 ✅
+
+**Zweck:** Unit Tests für Zoho Adapter get_lead_details Methode
+
+**Testet:**
+- Erfolgreicher Abruf mit allen Feldern (Phone, Mobile, Address, LinkedIn, Custom Fields)
+- Lead nicht gefunden (404 Handling)
+- Minimal Fields (nur Name + Email)
+
+**Ausführen:**
+```bash
+pytest tests/test_zoho_get_details.py -v
+# → 3/3 Tests bestanden ✅
+```
+
+---
+
+### 17. `test_twenty_get_details.py` - Twenty get_person_details 🆕 ✅
+
+**Zweck:** Unit Tests für Twenty Adapter get_person_details Methode
+
+**Testet:**
+- Erfolgreicher Abruf mit nested Schema (name.firstName, phones.primaryPhoneNumber)
+- Person nicht gefunden (404 Handling)
+- Minimal Fields (nur Name + Email)
+- Company Relation Error (graceful fallback)
+
+**Ausführen:**
+```bash
+pytest tests/test_twenty_get_details.py -v
+# → 4/4 Tests bestanden ✅
+```
+
+**Why:** Twenty nutzt komplexe nested Objects, muss separat getestet werden
+
+---
+
+**Run All New Tests:**
+```bash
+pytest tests/test_get_contact_details.py tests/test_zoho_get_details.py tests/test_twenty_get_details.py tests/test_unified_webhook.py -v
+# → 24/24 Tests bestanden ✅
 ```
 
 ---
