@@ -199,17 +199,30 @@ async def unified_webhook(platform: str, request: Request):
                 print(f"✅ Responding with challenge")
                 return {"challenge": challenge}
             
-            # 2. Event Deduplication (Slack sendet manchmal doppelte Events)
+            # 2. Slack Event Deduplication (Slack sendet manchmal doppelte Events)
             event_id = webhook_data.get("event_id")
             if event_id:
                 # Check if we've seen this event before
                 cache_key = f"slack:event:{event_id}"
                 if redis_client.exists(cache_key):
-                    print(f"⏭️ Skipping: Duplicate event {event_id}")
+                    print(f"⏭️ Skipping: Duplicate Slack event {event_id}")
                     return {"status": "ignored", "reason": "duplicate_event"}
                 # Mark event as seen (TTL 10 minutes)
                 redis_client.setex(cache_key, 600, "1")
-                print(f"✅ Event ID: {event_id} (cached)")
+                print(f"✅ Slack Event ID: {event_id} (cached)")
+        
+        # 1.5 Telegram Update Deduplication (Telegram sendet manchmal doppelte Updates)
+        if platform == "telegram":
+            update_id = webhook_data.get("update_id")
+            if update_id:
+                # Check if we've seen this update before
+                cache_key = f"telegram:update:{update_id}"
+                if redis_client.exists(cache_key):
+                    print(f"⏭️ Skipping: Duplicate Telegram update {update_id}")
+                    return {"status": "ignored", "reason": "duplicate_update"}
+                # Mark update as seen (TTL 10 minutes)
+                redis_client.setex(cache_key, 600, "1")
+                print(f"✅ Telegram Update ID: {update_id} (cached)")
         
         # 3. Get Chat-Adapter
         try:
