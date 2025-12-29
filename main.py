@@ -226,8 +226,11 @@ async def unified_webhook(platform: str, request: Request):
         # Parse Request Body
         webhook_data = await request.json()
         
-        print(f"📨 Webhook received: platform={platform}")
+        print(f"\n{'='*60}")
+        print(f"📨 WEBHOOK RECEIVED: platform={platform}")
         print(f"📄 Data type: {webhook_data.get('type', 'unknown')}")
+        print(f"📦 Full webhook data: {webhook_data}")
+        print(f"{'='*60}\n")
         
         # 1. Slack Challenge Handling (Webhook Verification)
         if platform == "slack":
@@ -287,6 +290,12 @@ async def unified_webhook(platform: str, request: Request):
         is_authenticated = getattr(request.state, "is_authenticated", False)
         registration_needed = getattr(request.state, "registration_needed", False)
         registration_pending = getattr(request.state, "registration_pending", False)
+        
+        print(f"🔐 Auth Status:")
+        print(f"   - User: {user.email if user else 'None'}")
+        print(f"   - Authenticated: {is_authenticated}")
+        print(f"   - Registration needed: {registration_needed}")
+        print(f"   - Registration pending: {registration_pending}")
         
         # 6. Handle Registration Flow
         if registration_needed:

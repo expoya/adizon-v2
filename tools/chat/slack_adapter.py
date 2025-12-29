@@ -62,6 +62,9 @@ class SlackAdapter(ChatAdapter):
             "challenge": "3eZbrw1aBm2rZgRNFdxV2595E9CY3gmdALWMmHkvFXO7tYXAYM8P"
         }
         """
+        print(f"🔵 Slack Adapter: Parsing webhook data...")
+        print(f"🔵 Webhook type: {webhook_data.get('type', 'unknown')}")
+        
         try:
             # Check for Challenge (Webhook Verification)
             if webhook_data.get("type") == "url_verification":
