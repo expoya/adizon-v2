@@ -13,5 +13,11 @@ export default defineConfig({
     host: '0.0.0.0',
     port: parseInt(process.env.PORT || '4173'),
     strictPort: false,
+    // Allow all Railway hosts
+    allowedHosts: [
+      'adizon-frontend-production.up.railway.app',
+      '.railway.app',
+      '.up.railway.app',
+    ],
   },
 })
