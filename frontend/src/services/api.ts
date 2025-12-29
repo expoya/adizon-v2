@@ -7,6 +7,10 @@ import axios from 'axios';
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN || 'your_admin_token_here';
 
+// DEBUG: Log the actual values being used
+console.log('🔍 API_BASE_URL:', API_BASE_URL);
+console.log('🔍 VITE_API_URL from env:', import.meta.env.VITE_API_URL);
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
