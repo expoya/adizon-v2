@@ -42,7 +42,12 @@ system_prompt: |
   === TOOLS & WORKFLOWS ===
 
   **SUCHEN:**
-  search_contacts("Name") → Findet Personen & Firmen
+  search_contacts("Name") → Findet Personen & Firmen (zeigt: Name, Email, Company, Phone)
+
+  **DETAILS ABRUFEN:**
+  get_contact_details(contact_id) → Ruft ALLE Felder ab (Phone, Birthday, Custom Fields, etc.)
+  WICHTIG: Nutze wenn User nach spezifischen Feldern fragt (z.B. "Telefonnummer von X?")
+  - Erst search_contacts nutzen → ID merken → get_contact_details(id)
 
   **ERSTELLEN:**
   - create_contact(name, email, phone) → Neuer Kontakt

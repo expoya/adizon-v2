@@ -257,6 +257,121 @@ class ZohoCRM:
             print(f"❌ Resolve Fehler: {e}")
             return None
     
+    def get_lead_details(self, lead_id: str) -> str:
+        """
+        Ruft alle Details eines Leads ab (inkl. Phone, Mobile, Custom Fields, etc.).
+        
+        Args:
+            lead_id: Zoho Lead ID (numerisch)
+            
+        Returns:
+            Formatierte Details des Leads
+        """
+        print(f"📋 Getting details for Lead ID: {lead_id}")
+        
+        try:
+            # Hole ALLE Felder des Leads
+            response = self._request("GET", f"Leads/{lead_id}")
+            
+            if not response or "data" not in response:
+                return f"❌ Lead mit ID {lead_id} nicht gefunden."
+            
+            lead = response["data"][0]  # Zoho returns array with 1 item
+            
+            # Extract wichtige Felder
+            first_name = lead.get("First_Name", "")
+            last_name = lead.get("Last_Name", "")
+            full_name = f"{first_name} {last_name}".strip()
+            
+            email = lead.get("Email", "")
+            phone = lead.get("Phone", "")
+            mobile = lead.get("Mobile", "")
+            company = lead.get("Company", "")
+            designation = lead.get("Designation", "")
+            
+            # Address
+            street = lead.get("Street", "")
+            city = lead.get("City", "")
+            state = lead.get("State", "")
+            zip_code = lead.get("Zip_Code", "")
+            country = lead.get("Country", "")
+            
+            # Other Fields
+            website = lead.get("Website", "")
+            linkedin = lead.get("LinkedIn", "")
+            lead_source = lead.get("Lead_Source", "")
+            industry = lead.get("Industry", "")
+            num_employees = lead.get("No_of_Employees")
+            annual_revenue = lead.get("Annual_Revenue")
+            
+            # Custom Fields
+            roof_area = lead.get("Roof_Area")
+            
+            # Notes
+            description = lead.get("Description", "")
+            
+            # Format Output
+            output = f"📇 **{full_name}**"
+            if designation:
+                output += f" ({designation})"
+            output += "\n"
+            
+            # Contact Info
+            output += "\n**📧 Kontakt:**\n"
+            if email:
+                output += f"  • Email: {email}\n"
+            if phone:
+                output += f"  • Phone: {phone}\n"
+            if mobile:
+                output += f"  • Mobile: {mobile}\n"
+            
+            # Company Info
+            if company or website or industry:
+                output += "\n**🏢 Firma:**\n"
+                if company:
+                    output += f"  • Name: {company}\n"
+                if website:
+                    output += f"  • Website: {website}\n"
+                if industry:
+                    output += f"  • Branche: {industry}\n"
+                if num_employees:
+                    output += f"  • Mitarbeiter: {num_employees}\n"
+                if annual_revenue:
+                    output += f"  • Umsatz: {annual_revenue}\n"
+            
+            # Address
+            if any([street, city, state, zip_code, country]):
+                output += "\n**📍 Adresse:**\n"
+                if street:
+                    output += f"  • {street}\n"
+                address_line = ", ".join(filter(None, [zip_code, city, state, country]))
+                if address_line:
+                    output += f"  • {address_line}\n"
+            
+            # Social
+            if linkedin:
+                output += f"\n**🔗 LinkedIn:** {linkedin}\n"
+            
+            # Lead Info
+            if lead_source:
+                output += f"\n**📊 Lead Source:** {lead_source}\n"
+            
+            # Custom Fields
+            if roof_area:
+                output += f"\n**🏠 Dachfläche:** {roof_area} m²\n"
+            
+            # Notes
+            if description:
+                output += f"\n**📝 Notizen:** {description}\n"
+            
+            output += f"\n**🆔 ID:** {lead_id}"
+            
+            return output
+            
+        except Exception as e:
+            print(f"❌ Get Lead Details Error: {e}")
+            return f"❌ Fehler beim Abrufen von Lead {lead_id}: {str(e)}"
+    
     def search_leads(self, query: str) -> str:
         """
         Smart-Fuzzy-Search für Leads:

@@ -205,6 +205,105 @@ class TwentyCRM:
             print(f"❌ Resolve Fehler: {e}")
             return None
 
+    def get_person_details(self, person_id: str) -> str:
+        """
+        Ruft alle Details einer Person ab (inkl. Phone, Job, Birthday, etc.).
+        
+        Args:
+            person_id: Twenty Person UUID
+            
+        Returns:
+            Formatierte Details der Person
+        """
+        print(f"📋 Getting details for Person ID: {person_id}")
+        
+        try:
+            # Hole Person mit allen Feldern
+            response = self._request("GET", f"people/{person_id}")
+            
+            if not response:
+                return f"❌ Person mit ID {person_id} nicht gefunden."
+            
+            person = response if isinstance(response, dict) else response.get("person", {})
+            
+            # Extract wichtige Felder
+            first_name = person.get("nameFirstName", "")
+            last_name = person.get("nameLastName", "")
+            full_name = f"{first_name} {last_name}".strip()
+            
+            # Contact Info
+            emails_obj = person.get("emails", {})
+            email = emails_obj.get("primaryEmail", "") if emails_obj else ""
+            
+            phones_obj = person.get("phones", {})
+            phone = phones_obj.get("primaryPhoneNumber", "") if phones_obj else ""
+            
+            # Job Info
+            job_title = person.get("jobTitle", "")
+            
+            # Social
+            linkedin_obj = person.get("linkedinLink", {})
+            linkedin = linkedin_obj.get("primaryLinkUrl", "") if linkedin_obj else ""
+            
+            # Location
+            city = person.get("city", "")
+            
+            # Personal
+            birthday = person.get("birthday", "")
+            
+            # Company (Relation)
+            company_id = person.get("companyId")
+            company_name = ""
+            if company_id:
+                company_data = self._request("GET", f"companies/{company_id}")
+                if company_data:
+                    company_name = company_data.get("name", "")
+            
+            # Created/Updated
+            created_at = person.get("createdAt", "")
+            updated_at = person.get("updatedAt", "")
+            
+            # Format Output
+            output = f"📇 **{full_name}**"
+            if job_title:
+                output += f" ({job_title})"
+            output += "\n"
+            
+            # Contact Info
+            output += "\n**📧 Kontakt:**\n"
+            if email:
+                output += f"  • Email: {email}\n"
+            if phone:
+                output += f"  • Phone: {phone}\n"
+            
+            # Company
+            if company_name:
+                output += f"\n**🏢 Firma:** {company_name}\n"
+            
+            # Location
+            if city:
+                output += f"\n**📍 Stadt:** {city}\n"
+            
+            # Social
+            if linkedin:
+                output += f"\n**🔗 LinkedIn:** {linkedin}\n"
+            
+            # Personal
+            if birthday:
+                output += f"\n**🎂 Geburtstag:** {birthday}\n"
+            
+            # Meta
+            if created_at:
+                output += f"\n**📅 Erstellt:** {created_at[:10]}\n"
+            
+            output += f"\n**🆔 ID:** {person_id}"
+            
+            return output
+            
+        except Exception as e:
+            print(f"❌ Get Person Details Error: {e}")
+            return f"❌ Fehler beim Abrufen von Person {person_id}: {str(e)}"
+    
     def search_contacts(self, query: str) -> str:
         """
         Smart-Fuzzy-Search mit Scoring & Sortierung:

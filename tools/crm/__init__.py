@@ -37,6 +37,7 @@ create_contact_func = mock_create
 create_task_func = mock_task
 create_note_func = mock_note
 update_entity_func = None  # Nur im Live-Modus verfügbar
+get_details_func = None  # Nur im Live-Modus verfügbar
 
 # === ADAPTER SELECTION ===
 if crm_system == "TWENTY":
@@ -48,6 +49,7 @@ if crm_system == "TWENTY":
         create_task_func = adapter.create_task
         create_note_func = adapter.create_note
         update_entity_func = adapter.update_entity
+        get_details_func = adapter.get_person_details
         print("✅ Twenty Adapter connected")
     except Exception as e:
         print(f"❌ Twenty Adapter Error: {e}")
@@ -61,6 +63,7 @@ elif crm_system == "ZOHO":
         create_task_func = adapter.create_task
         create_note_func = adapter.create_note
         update_entity_func = adapter.update_entity
+        get_details_func = adapter.get_lead_details
         print("✅ Zoho Adapter connected")
     except Exception as e:
         print(f"❌ Zoho Adapter Error: {e}")
@@ -187,6 +190,26 @@ def get_crm_tools_for_user(user_id: str) -> list:
             return f"❌ Ungültiges JSON-Format für fields: {fields}"
         
         return update_entity_func(target, entity_type, fields_dict)
+    
+    def get_contact_details_wrapper(contact_id: str) -> str:
+        """
+        Ruft alle Details eines Kontakts ab (inkl. Phone, Custom Fields, etc.).
+        
+        Args:
+            contact_id: CRM ID des Kontakts (UUID für Twenty, numerisch für Zoho)
+            
+        Returns:
+            Formatierte Details mit allen verfügbaren Feldern
+            
+        Nutze dieses Tool, wenn:
+        - User nach spezifischen Feldern fragt (z.B. "Welche Telefonnummer hat X?")
+        - Du mehr Details brauchst als search_contacts liefert
+        - Du bereits die ID eines Kontakts hast
+        """
+        if not get_details_func:
+            return "❌ Get-Details-Feature nicht verfügbar (nur im Live-Modus mit CRM-Adapter)."
+        
+        return get_details_func(contact_id)
 
     # 3. Liste zurückgeben
     tools = [
@@ -208,6 +231,16 @@ def get_crm_tools_for_user(user_id: str) -> list:
                 update_entity_wrapper, 
                 name="update_entity",
                 description="Aktualisiert Felder eines CRM-Eintrags (Person: job, linkedin, city, birthday | Company: website, size, industry, address)"
+            )
+        )
+    
+    # Get-Details-Tool nur hinzufügen, wenn verfügbar
+    if get_details_func:
+        tools.append(
+            StructuredTool.from_function(
+                get_contact_details_wrapper,
+                name="get_contact_details",
+                description="Ruft ALLE Details eines Kontakts ab (Phone, Birthday, Custom Fields, etc.). Nutze wenn User nach spezifischen Feldern fragt oder du mehr Details brauchst."
             )
         )
     
