@@ -1,11 +1,13 @@
 """
 Adizon V2 - AI Assistant für KMUs
+Version 3.0 - Chat-Adapter System
 """
 # Environment Variables laden
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from openai import OpenAI
 import os
@@ -13,13 +15,17 @@ from agents.chat_handler import handle_chat
 from utils.memory import get_session_state, clear_user_session
 from agents.crm_handler import handle_crm
 from utils.agent_config import load_agent_config
-import requests
+
+# Chat-Adapter System
+from tools.chat import get_chat_adapter, StandardMessage
+from tools.chat.interface import WebhookParseError
+from tools.chat.slack_adapter import handle_slack_challenge
 
 # FastAPI App
 app = FastAPI(
     title="Adizon",
-    description="AI Assistant für KMUs",
-    version="2.0.0"
+    description="AI Assistant für KMUs - Multi-Platform Chat Adapter",
+    version="3.0.0"
 )
 
 
@@ -96,6 +102,52 @@ def detect_intent(message: str) -> str:
         print(f"🔍 === INTENT DETECTION END (ERROR) ===\n")
         return "CHAT"
 
+
+def handle_message(msg: StandardMessage) -> str:
+    """
+    Platform-agnostic Message Handler.
+    
+    Verarbeitet Messages von allen Chat-Plattformen (Telegram, Slack, etc.)
+    
+    Args:
+        msg: StandardMessage mit User-Info und Text
+        
+    Returns:
+        Response text
+    """
+    print(f"\n{'='*50}")
+    print(f"💬 [{msg.platform.upper()}] Message from {msg.user_name}: {msg.text}")
+    
+    # 1. KILL SWITCH CHECK
+    if msg.text.strip().upper() in ["NEUSTART", "/RESET", "RESET"]:
+        clear_user_session(msg.user_id)
+        print(f"💥 Session Reset for {msg.user_id}")
+        return "Alles klar! Mein Gedächtnis ist gelöscht. Womit fangen wir neu an? 🧠✨"
+    
+    # 2. STATE CHECK (Sticky Session)
+    current_state = get_session_state(msg.user_id)
+    print(f"🧠 Current Session State: {current_state}")
+    
+    if current_state == "ACTIVE":
+        print("⏩ Skipping Router (State is ACTIVE) -> Direct to CRM")
+        response_text = handle_crm(msg.text, msg.user_name, msg.user_id)
+    else:
+        # 3. NORMAL ROUTING (State is IDLE)
+        intent = detect_intent(msg.text)
+        
+        if intent == "CHAT":
+            response_text = handle_chat(msg.text, msg.user_name)
+        elif intent == "CRM":
+            response_text = handle_crm(msg.text, msg.user_name, msg.user_id)
+        else:
+            response_text = "Error."
+    
+    print(f"✅ Response generated ({len(response_text)} chars)")
+    print(f"{'='*50}\n")
+    
+    return response_text
+
+
 # === ENDPOINTS ===
 
 @app.get("/")
@@ -117,75 +169,97 @@ def test_intent(message: str):
         "intent": intent
     }
 
-@app.post("/telegram-webhook")
-def telegram_webhook(request: dict):
+
+@app.post("/webhook/{platform}")
+async def unified_webhook(platform: str, request: Request):
     """
-    Telegram Webhook - Production Endpoint
+    Unified Webhook für alle Chat-Plattformen.
+    
+    Endpoints:
+    - POST /webhook/telegram → Telegram Bot
+    - POST /webhook/slack → Slack Bot
+    - POST /webhook/teams → MS Teams Bot (future)
+    
+    Args:
+        platform: Platform identifier (telegram, slack, teams)
+        request: FastAPI Request mit Webhook Data
     """
     try:
-        # Telegram Message Format parsen
-        message_data = request.get("message", {})
-        chat_id = message_data.get("chat", {}).get("id")
-        user_message = message_data.get("text", "")
-        user_name = message_data.get("from", {}).get("first_name", "Unknown")
-        user_id = str(message_data.get("from", {}).get("id", ""))
+        # Parse Request Body
+        webhook_data = await request.json()
         
-        # Wenn keine Message, ignorieren
-        if not chat_id or not user_message:
-            return {"status": "ignored"}
+        print(f"📨 Webhook received: platform={platform}")
+        print(f"📄 Data type: {webhook_data.get('type', 'unknown')}")
         
-        print(f"\n{'='*50}")
-        print(f"📱 Telegram Message from {user_name}: {user_message}")
-
-        # 1. KILL SWITCH CHECK
-        if user_message.strip().upper() in ["NEUSTART", "/RESET", "RESET"]:
-            clear_user_session(user_id)
-            response_text = "Alles klar! Mein Gedächtnis ist gelöscht. Womit fangen wir neu an? 🧠✨"
-            requests.post(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage", 
-                          json={"chat_id": chat_id, "text": response_text})
-            return {"status": "reset"}
-
-        # 2. STATE CHECK (Sticky Session)
-        current_state = get_session_state(user_id)
-        print(f"🧠 Current Session State: {current_state}")
-
-        if current_state == "ACTIVE":
-            print("⏩ Skipping Router (State is ACTIVE) -> Direct to CRM")
-            response_text = handle_crm(user_message, user_name, user_id)
+        # 1. Slack Challenge Handling (Webhook Verification)
+        if platform == "slack":
+            challenge = handle_slack_challenge(webhook_data)
+            if challenge:
+                print(f"✅ Slack Challenge received: {challenge[:50]}...")
+                print(f"✅ Responding with challenge")
+                return {"challenge": challenge}
         
+        # 2. Get Chat-Adapter
+        try:
+            adapter = get_chat_adapter(platform)
+        except ValueError as e:
+            print(f"❌ Unknown platform: {platform}")
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "message": str(e)}
+            )
+        
+        # 3. Parse Message
+        try:
+            msg = adapter.parse_incoming(webhook_data)
+        except WebhookParseError as e:
+            error_msg = str(e)
+            # Spezial-Handling für bestimmte Fehler
+            if "Ignoring bot message" in error_msg:
+                print(f"⏭️ Skipping: {error_msg}")
+                return {"status": "ignored"}
+            print(f"❌ Webhook Parse Error: {error_msg}")
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "message": error_msg}
+            )
+        
+        # 4. Handle Message (Platform-agnostic)
+        response_text = handle_message(msg)
+        
+        # 5. Send Response
+        success = adapter.send_message(msg.chat_id, response_text)
+        
+        if success:
+            return {"status": "success"}
         else:
-            # 3. NORMAL ROUTING (State is IDLE)
-            intent = detect_intent(user_message)
-            
-            if intent == "CHAT":
-                response_text = handle_chat(user_message, user_name)
-            elif intent == "CRM":
-                response_text = handle_crm(user_message, user_name, user_id)
-            else:
-                response_text = "Error."
-    
-        # ANTWORT AN TELEGRAM SENDEN
-        telegram_api_url = f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage"
-        
-        telegram_response = requests.post(
-            telegram_api_url,
-            json={
-                "chat_id": chat_id,
-                "text": response_text
-            }
-        )
-        
-        if telegram_response.status_code == 200:
-            print("✅ Message sent to Telegram!")
-        else:
-            print(f"❌ Telegram API Error: {telegram_response.text}")
-        
-        print(f"{'='*50}\n")
-        return {"status": "success"}
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": "Failed to send response"}
+            )
         
     except Exception as e:
-        print(f"❌ Telegram Webhook Error: {e}")
-        return {"status": "error", "message": str(e)}
+        print(f"❌ Unified Webhook Error ({platform}): {e}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+@app.post("/telegram-webhook")
+async def telegram_webhook_legacy(request: Request):
+    """
+    Legacy Telegram Webhook - Backwards Compatible.
+    Redirects to unified webhook.
+    
+    Note: Für neue Deployments nutze /webhook/telegram stattdessen.
+    """
+    print("📱 Legacy Telegram Webhook called (redirecting to unified)")
+    webhook_data = await request.json()
+    
+    # Redirect zu unified webhook
+    return await unified_webhook("telegram", request)
 
 
 @app.post("/adizon")

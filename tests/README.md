@@ -1,6 +1,6 @@
 # Adizon V2 - Test Suite
 
-**Letzte Aktualisierung:** 28.12.2025  
+**Letzte Aktualisierung:** 29.12.2025  
 **Status:** Aktiv
 
 ---
@@ -189,7 +189,13 @@ echo "OPENROUTER_API_KEY=your_key" >> .env
 | `test_undo.py` | ✅ | 6/6 | Undo System | Multi-User Safety |
 | `test_agent_config.py` | ✅ | 7/7 | YAML Config | Alle 4 Agents |
 | `test_crm_adapter.py` | ✅ | 8/8 | CRM Interface | Mock-basiert |
-| `test_fuzzy_search.py` | 🆕 | 16/16 | Fuzzy-Matching | Voice-Ready Search |
+| `test_fuzzy_search.py` | ✅ | 16/16 | Fuzzy-Matching | Voice-Ready Search |
+| `test_chat_interface.py` | 🆕 | 8/8 | Chat Interface | StandardMessage |
+| `test_telegram_adapter.py` | 🆕 | 8/8 | Telegram | Parse & Send |
+| `test_slack_adapter.py` | 🆕 | 10/10 | Slack | Parse & Send |
+| `test_chat_factory.py` | 🆕 | 10/10 | Chat Factory | Multi-Platform |
+
+**Total:** 118 Tests (82 → 118, +36 durch Chat-Adapter System)
 
 ---
 
@@ -325,6 +331,94 @@ pytest tests/test_fuzzy_search.py -v
 ```bash
 # Benötigt rapidfuzz (bereits in requirements.txt)
 pip install rapidfuzz==3.10.1
+```
+
+---
+
+## 🆕 Phase 2 Tests (29.12.2025)
+
+### 10. `test_chat_interface.py` - Chat-Adapter Interface ✅
+
+**Zweck:** Validiert Chat-Adapter Interface & StandardMessage
+
+**Testet:**
+- StandardMessage Creation & Repr
+- ChatAdapter Interface Compliance
+- Default Methods (format_response, validate_webhook)
+- Exception Hierarchy (WebhookParseError, MessageSendError)
+
+**Ausführen:**
+```bash
+python tests/test_chat_interface.py
+# → 8/8 Tests bestanden ✅
+```
+
+---
+
+### 11. `test_telegram_adapter.py` - Telegram Chat-Adapter ✅
+
+**Zweck:** Validiert Telegram Adapter Implementation
+
+**Testet:**
+- Parse Telegram Webhook (Mock)
+- Parse Errors (missing fields)
+- Send Message (Mock API Call)
+- Error-Handling
+- Platform Name
+- Init ohne Token
+
+**Ausführen:**
+```bash
+python tests/test_telegram_adapter.py
+# → 8/8 Tests bestanden ✅
+```
+
+---
+
+### 12. `test_slack_adapter.py` - Slack Chat-Adapter ✅
+
+**Zweck:** Validiert Slack Adapter Implementation
+
+**Testet:**
+- Parse Slack Event (Mock)
+- Parse Slack Challenge (Webhook Verification)
+- Bot Message Loop Prevention
+- Parse Errors
+- Send Message (Mock API Call)
+- Helper Functions
+- Platform Name
+- Init ohne Token
+
+**Ausführen:**
+```bash
+python tests/test_slack_adapter.py
+# → 10/10 Tests bestanden ✅
+```
+
+---
+
+### 13. `test_chat_factory.py` - Chat-Adapter Factory ✅
+
+**Zweck:** Validiert Chat-Adapter Factory & Platform Selection
+
+**Testet:**
+- Get Telegram/Slack Adapter
+- Case Insensitive Platform Names
+- Unknown Platform Error
+- Default Adapter (verschiedene Configs)
+- List Supported Platforms
+- Interface Compliance Check
+
+**Ausführen:**
+```bash
+python tests/test_chat_factory.py
+# → 10/10 Tests bestanden ✅
+```
+
+**Run All Chat Tests:**
+```bash
+pytest tests/test_chat_*.py -v
+# → 36/36 Tests bestanden ✅
 ```
 
 ---
