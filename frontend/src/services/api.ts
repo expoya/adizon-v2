@@ -21,7 +21,7 @@ const api = axios.create({
 
 // DEBUG: Interceptor to log all requests
 api.interceptors.request.use((config) => {
-  console.log('🚀 Axios Request:', config.method?.toUpperCase(), config.baseURL + config.url);
+  console.log('🚀 Axios Request:', config.method?.toUpperCase(), (config.baseURL || '') + (config.url || ''));
   return config;
 }, (error) => {
   console.error('❌ Axios Request Error:', error);
