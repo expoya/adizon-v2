@@ -20,9 +20,18 @@ Adizon V2 ist ein Multi-Plattform AI-Assistent für KMUs, der Chat-Plattformen (
 ┌───────────────────────────────────────────────────┼──────────────┼────┘
 │                    FASTAPI SERVER (main.py)       │              │     
 │  ┌─────────────────────────────────────────┐     │              │     
-│  │    /webhook/{platform} Endpoint         │     │              │     
+│  │       Auth Middleware (NEW!)            │     │              │     
+│  │  • Extract Platform + User ID           │     │              │     
+│  │  • Check PostgreSQL: Authorized?        │     │              │     
+│  │  • Inject request.state.user            │     │              │     
 │  └───────────────┬─────────────────────────┘     │              │     
 │                  │                               │              │     
+│  ┌───────────────▼─────────────────────────┐     │              │     
+│  │    /webhook/{platform} Endpoint         │     │              │     
+│  │  • Registration Flow (new users)        │     │              │     
+│  │  • Approval Check (pending users)       │     │              │     
+│  └───────────────┬─────────────────────────┘     │              │     
+│                  │ [AUTHORIZED ONLY]             │              │     
 │  ┌───────────────▼─────────────────────────┐     │              │     
 │  │         Message Handler                 │     │              │     
 │  └───────────────┬─────────────────────────┘     │              │     
@@ -65,6 +74,20 @@ Adizon V2 ist ein Multi-Plattform AI-Assistent für KMUs, der Chat-Plattformen (
 └─────────────────────────────────────────────────────────────────────────┘
                                │                                          
 ┌──────────────────────────────┼──────────────────────────────────────────┐
+│                 DATA LAYER   │                                          │
+│  ┌───────────────────────────▼────────────────────────────────────────┐│
+│  │                PostgreSQL Database (NEW!)                          ││
+│  │  • users (Auth & User Management)                                  ││
+│  │  • Alembic Migrations                                              ││
+│  └───────────────────────────────────────────────────────────────────┘│
+│  ┌───────────────────────────────────────────────────────────────────┐│
+│  │                    Redis Database                                 ││
+│  │           • TTL Management  • Deduplication  • Caching            ││
+│  │           • Conversation History  • Session State                 ││
+│  └───────────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────────────┘
+                               │                                          
+┌──────────────────────────────┼──────────────────────────────────────────┐
 │                 UTILS LAYER  │                                          │
 │  ┌───────────────────────────▼────────────────────────────────────────┐│
 │  │  Memory System (Redis)           Agent Config (YAML Loader)        ││
@@ -73,8 +96,9 @@ Adizon V2 ist ein Multi-Plattform AI-Assistent für KMUs, der Chat-Plattformen (
 │  │  • Undo Context                   • LLM Parameters                 ││
 │  └───────────────────────────────────────────────────────────────────┘│
 │  ┌───────────────────────────────────────────────────────────────────┐│
-│  │                    Redis Database                                 ││
-│  │           • TTL Management  • Deduplication  • Caching            ││
+│  │  User Management (NEW!)                                           ││
+│  │  • UserRepository (DB Layer)      • RegistrationService           ││
+│  │  • User Model (SQLAlchemy)        • Admin API (FastAPI)           ││
 │  └───────────────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────────────┘
                                │                                          
@@ -84,6 +108,17 @@ Adizon V2 ist ein Multi-Plattform AI-Assistent für KMUs, der Chat-Plattformen (
 │  │                    YAML Config Files (prompts/)                    ││
 │  │  • chat_handler.yaml      • crm_handler.yaml                       ││
 │  │  • session_guard.yaml     • intent_detection.yaml                  ││
+│  └────────────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────────────┘
+                               │                                          
+┌──────────────────────────────┼──────────────────────────────────────────┐
+│         ADMIN FRONTEND       │                                          │
+│  ┌───────────────────────────▼────────────────────────────────────────┐│
+│  │              React Admin Dashboard (NEW!)                          ││
+│  │  • Dashboard (Stats & Quick Actions)                               ││
+│  │  • Users Management (CRUD)                                         ││
+│  │  • Approval Queue (Pending Users)                                  ││
+│  │  • REST API Client (Axios)                                         ││
 │  └────────────────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -98,7 +133,9 @@ flowchart TB
     slack[Slack Bot]
     twentyCRM[Twenty CRM]
     zohoCRM[Zoho CRM]
+    adminUI[Admin Frontend]
     
+    authMW[Auth Middleware]
     webhook[Unified Webhook]
     intent[Intent Detection]
     sessionCheck[Session Check]
@@ -113,9 +150,23 @@ flowchart TB
     memory[Memory Redis]
     config[Agent Config]
     redis[(Redis DB)]
+    postgres[(PostgreSQL)]
+    userRepo[User Repository]
+    regService[Registration Service]
+    adminAPI[Admin API]
     
-    telegram -->|POST| webhook
-    slack -->|POST| webhook
+    telegram -->|POST| authMW
+    slack -->|POST| authMW
+    
+    authMW -->|Check Auth| postgres
+    authMW -->|Authorized| webhook
+    authMW -->|New User| regService
+    
+    regService --> userRepo
+    userRepo --> postgres
+    
+    adminUI --> adminAPI
+    adminAPI --> userRepo
     
     webhook --> sessionCheck
     sessionCheck -->|IDLE| intent
@@ -144,21 +195,52 @@ flowchart TB
 
 ## Komponenten-Beschreibung
 
+### 0. Auth Middleware Layer (`middleware/`)
+**NEU!** Zentrale Authentication & Authorization für alle Webhooks.
+
+#### Auth Middleware (`middleware/auth.py`)
+Prüft bei jedem Webhook-Request, ob User autorisiert ist.
+
+**Flow:**
+1. Extract `platform` aus URL Path (`/webhook/slack` → `slack`)
+2. Extract `platform_id` aus Webhook Payload (Telegram: `from.id`, Slack: `user`)
+3. Query PostgreSQL: `SELECT * FROM users WHERE platform=? AND platform_id=?`
+4. Check: `is_approved=True` AND `is_active=True`?
+5. Inject User in `request.state.user` für Handler
+6. Bei Fehler: Trigger Registration oder sende Unauthorized
+
+**Features:**
+- ✅ Platform-agnostische User-IDs: `slack:U0A6RG60WCQ`
+- ✅ Path-based Skip (Admin API, Docs, Health Checks)
+- ✅ Separate exact path vs prefix matching
+- ✅ Automatic User Extraction aus verschiedenen Webhook-Formaten
+- ✅ Multi-User Isolation
+
+**Skip Paths:**
+```python
+skip_exact = ["/"]  # Nur root path
+skip_paths = ["/docs", "/api/users", "/openapi.json"]  # Prefix match
+```
+
 ### 1. Entry Point: `main.py`
 Der zentrale FastAPI-Server, der alle eingehenden Requests verarbeitet.
 
 **Hauptfunktionen:**
+- **Auth Middleware**: Automatische User-Authentifizierung bei jedem Request
 - **Unified Webhook**: `/webhook/{platform}` - Ein Endpoint für alle Chat-Plattformen
+- **Registration Flow**: Neue User automatisch registrieren
+- **Approval Check**: Pending User erhalten "Warte auf Freigabe" Message
 - **Intent Detection**: Klassifiziert Messages als `CHAT` oder `CRM`
 - **Session State Management**: Prüft ob User in aktiver CRM-Session ist (ACTIVE/IDLE)
 - **Message Routing**: Leitet zu Chat- oder CRM-Handler weiter
 - **Duplicate Event Prevention**: Redis-basierte Deduplication für Telegram/Slack
 
 **Wichtige Endpoints:**
-- `POST /webhook/{platform}` - Unified webhook für alle Plattformen
-- `POST /telegram-webhook` - Legacy Telegram endpoint
-- `POST /adizon` - Lokaler Test-Endpoint
-- `GET /` - Health check
+- `POST /webhook/{platform}` - Unified webhook für alle Plattformen (AUTH REQUIRED)
+- `GET /api/users` - Admin API: Alle User
+- `GET /api/users/pending` - Admin API: Approval Queue
+- `POST /api/users/{user_id}/approve` - Admin API: User freigeben
+- `GET /` - Health check (PUBLIC)
 
 ### 2. Agents Layer (`agents/`)
 KI-Agenten, die verschiedene Aufgaben übernehmen.
@@ -257,7 +339,88 @@ YAML-basierte Konfiguration für LLM-Settings und Prompts.
 - `get_parameters()`: Temperature, Top-P, etc.
 - `get_agent_config()`: Agent-spezifische Settings
 
-### 5. Configuration (`prompts/`)
+### 5. User Management System (`models/`, `repositories/`, `services/`, `api/`)
+**NEU!** Enterprise-Ready User Management mit PostgreSQL Backend.
+
+#### User Model (`models/user.py`)
+SQLAlchemy Model für User-Daten.
+
+**Schema:**
+```python
+users:
+  - id: UUID (Primary Key)
+  - platform: str (telegram, slack)
+  - platform_id: str (Platform User ID)
+  - name: str
+  - email: Optional[str]
+  - is_active: bool (Deaktivierbar)
+  - is_approved: bool (Approval Flow)
+  - created_at: DateTime
+  - approved_at: Optional[DateTime]
+  - approved_by: Optional[str]
+
+Unique Constraint: (platform, platform_id)
+```
+
+#### User Repository (`repositories/user_repository.py`)
+Database Layer für User CRUD Operations.
+
+**API:**
+- `get_user_by_platform_id(platform, platform_id)` - Auth Check
+- `get_all_users()` - Admin Dashboard
+- `get_pending_users()` - Approval Queue
+- `create_user()` - Registration
+- `update_user()` - Edit User
+- `approve_user()` - Approval Flow
+- `delete_user()` - Admin Delete
+
+**Features:**
+- ✅ Type-Safe mit Pydantic
+- ✅ Transaction Safety
+- ✅ Filter & Pagination
+- ✅ Duplicate Detection
+
+#### Registration Service (`services/registration_service.py`)
+Business Logic für User Onboarding.
+
+**Features:**
+- Automatic User Creation bei erstem Kontakt
+- Status Check (approved, pending, not_found)
+- Welcome Message Trigger
+- Optional: Admin Notification
+
+#### Admin API (`api/users.py`)
+REST API für User Management.
+
+**Endpoints:**
+- `GET /api/users` - Liste aller User
+- `GET /api/users/pending` - Approval Queue
+- `GET /api/users/{user_id}` - User Details
+- `POST /api/users` - Create User (Manual)
+- `PUT /api/users/{user_id}` - Update User
+- `POST /api/users/{user_id}/approve` - Approve User
+- `DELETE /api/users/{user_id}` - Delete User
+
+#### Admin Frontend (`frontend/`)
+React-basiertes Admin Dashboard (TailwindCSS + Vite).
+
+**Pages:**
+1. **Dashboard** - Stats, Quick Actions, Recent Activity
+2. **Users** - Tabelle aller User, Filter, Edit/Delete
+3. **Approvals** - Queue, Approve/Reject, Platform Badges
+
+**Components:**
+- `UserForm.tsx` - Create/Edit Modal
+- `UserDetail.tsx` - Details View
+- `api.ts` - Axios API Client
+
+**Tech Stack:**
+- React 19 + TypeScript
+- Vite (Build Tool)
+- TailwindCSS (Styling)
+- Axios (HTTP Client)
+
+### 6. Configuration (`prompts/`)
 YAML-Dateien mit System-Prompts, Model-Settings und Parametern.
 
 **Konfigurationsdateien:**
@@ -287,10 +450,28 @@ system_prompt: |
 
 ## Datenfluss
 
+### 0. Authentication Flow (NEW!)
+```
+Chat-Plattform (Telegram/Slack)
+  ↓ POST /webhook/{platform}
+Auth Middleware
+  ↓ Extract platform + platform_id
+PostgreSQL Query
+  ├─ User Found & Approved → request.state.user = User ✅
+  ├─ User Found & Pending → request.state.registration_pending = True ⏳
+  └─ User Not Found → request.state.registration_needed = True 🆕
+Webhook Handler
+  ├─ Authorized → Normal Processing
+  ├─ Pending → "Warte auf Freigabe" Message
+  └─ New User → Registration Service → DB Insert
+```
+
 ### 1. Incoming Message Flow
 ```
 Chat-Plattform (Telegram/Slack)
   ↓ POST Webhook
+Auth Middleware (Check Authorization)
+  ↓ [AUTHORIZED ONLY]
 FastAPI Unified Webhook Handler
   ↓ Parse mit Chat-Adapter
 StandardMessage (Platform-agnostic)
@@ -475,6 +656,8 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 - [Feature List](FEATURE-LIST.md) - Alle implementierten Features
 - [Troubleshooting](TROUBLESHOOTING.md) - Häufige Probleme & Lösungen
+- [Changelog](changelog.md) - Entwicklungshistorie & Release Notes
+- [User Management README](../README_USER_MANAGEMENT.md) - Auth & Admin Dashboard Guide
 - [Field Enrichment Guide](../Quick%20Reference%20Field%20enrichment.md) - CRM Field-Mapping Details
 - [Test README](../tests/README.md) - Test-Suite Dokumentation
 

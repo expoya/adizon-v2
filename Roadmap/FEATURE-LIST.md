@@ -2,6 +2,7 @@
 
 **AI Sales Agent für KMUs**  
 **Stand:** 29.12.2025  
+**Version:** 2.6 (User Management & Security)  
 **Status:** 🟢 Production-Ready
 
 ---
@@ -22,6 +23,7 @@ Diese Feature-Liste dokumentiert alle implementierten Funktionen von Adizon V2 f
 - Voice-ready (Spracherkennung-tolerant)
 - 95% CRM Data Completeness (statt 50%)
 - Multi-Platform Support (Telegram, Slack, Teams)
+- Enterprise-Ready Security mit User Management
 - Self-Hosted & GDPR-konform
 
 ---
@@ -83,11 +85,25 @@ Diese Feature-Liste dokumentiert alle implementierten Funktionen von Adizon V2 f
 
 | Feature | Status | Beschreibung | Business Impact |
 |---------|--------|--------------|----------------|
-| **106 Tests** | ✅ Live | 100% Pass Rate (82 + 24 neue) | Regression Prevention |
+| **132 Tests** | ✅ Live | 100% Pass Rate (106 + 26 neue) | Regression Prevention |
 | **Error-Handling** | ✅ Live | Graceful Degradation | Keine Crashes |
 | **Multi-User Safe** | ✅ Live | Isolierte Sessions/Undo | Team-fähig |
 | **Performance** | ✅ Live | <0.1ms Fuzzy-Match | 20.000 matches/sec |
 | **Deduplication** | ✅ Live | Verhindert Webhook-Loops | Production-Safe |
+
+### 7. 🔐 User Management & Security
+
+| Feature | Status | Beschreibung | Business Impact |
+|---------|--------|--------------|----------------|
+| **Auth Middleware** | ✅ Live | Platform-agnostische Authentication | Enterprise-Ready Security |
+| **PostgreSQL Backend** | ✅ Live | User DB mit Alembic Migrations | Production-Grade Storage |
+| **Approval Flow** | ✅ Live | Neue User warten auf Admin-Freigabe | Kontrollierte Zugriffe |
+| **Platform-User-IDs** | ✅ Live | `slack:U123` ≠ `telegram:456` | Multi-Platform Isolation |
+| **Admin Dashboard** | ✅ Live | React Frontend (Users, Approvals, Stats) | Self-Service Management |
+| **REST API** | ✅ Live | 7 Endpoints für User Management | External Tools Support |
+| **Registration Service** | ✅ Live | Auto-Registrierung bei erstem Kontakt | Frictionless Onboarding |
+| **User Repository** | ✅ Live | Type-Safe CRUD mit Pydantic | Code Quality |
+| **Automatic Auth Check** | ✅ Live | Bei jedem Webhook Request | Zero Trust Architecture |
 
 ---
 
@@ -108,12 +124,14 @@ Diese Feature-Liste dokumentiert alle implementierten Funktionen von Adizon V2 f
 | Metrik | Wert |
 |--------|------|
 | **Fuzzy-Match Speed** | <0.1ms (20.000/sec) |
-| **Test Coverage** | 106 Tests, 100% Pass |
+| **Test Coverage** | 132 Tests, 100% Pass |
 | **Session Timeout** | 10 Min Auto-Logout |
 | **Memory Retention** | 24h persistent |
 | **Response Time** | <2 Sek (LLM Call) |
 | **Deduplication TTL** | 10 Min (Redis) |
 | **Webhook Reliability** | 99.9% (mit Deduplication) |
+| **Auth Check** | <5ms (PostgreSQL) |
+| **Admin Dashboard** | React 19 + TailwindCSS |
 
 ---
 
