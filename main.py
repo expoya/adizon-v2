@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from openai import OpenAI
 import os
 from agents.chat_handler import handle_chat
-from utils.memory import get_session_state, clear_user_session
+from utils.memory import get_session_state, clear_user_session, redis_client
 from agents.crm_handler import handle_crm
 from utils.agent_config import load_agent_config
 
@@ -204,11 +204,11 @@ async def unified_webhook(platform: str, request: Request):
             if event_id:
                 # Check if we've seen this event before
                 cache_key = f"slack:event:{event_id}"
-                if r.exists(cache_key):
+                if redis_client.exists(cache_key):
                     print(f"⏭️ Skipping: Duplicate event {event_id}")
                     return {"status": "ignored", "reason": "duplicate_event"}
                 # Mark event as seen (TTL 10 minutes)
-                r.setex(cache_key, 600, "1")
+                redis_client.setex(cache_key, 600, "1")
                 print(f"✅ Event ID: {event_id} (cached)")
         
         # 3. Get Chat-Adapter
