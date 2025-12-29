@@ -37,7 +37,9 @@ from api import users_router
 app = FastAPI(
     title="Adizon",
     description="AI Assistant für KMUs - Multi-Platform Chat Adapter with User-Management",
-    version="4.0.0"
+    version="4.0.0",
+    # Disable automatic slash redirect to avoid HTTP downgrade
+    redirect_slashes=False
 )
 
 # CORS Configuration (für React Frontend)
