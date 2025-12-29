@@ -39,8 +39,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         """Main Middleware Logic"""
         
+        print(f"🔵🔵🔵 AUTH MIDDLEWARE CALLED: {request.url.path} 🔵🔵🔵")
+        
         # Skip Auth für bestimmte Pfade
         if any(request.url.path.startswith(path) for path in self.skip_paths):
+            print(f"⏭️ Skipping auth for: {request.url.path}")
             return await call_next(request)
         
         # Nur Webhooks authenticaten
@@ -120,6 +123,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         finally:
             db.close()
         
+        print(f"🔵🔵🔵 AUTH MIDDLEWARE DONE: Calling next handler 🔵🔵🔵")
         return await call_next(request)
     
     def _extract_user_info(self, platform: str, webhook_data: dict) -> Optional[tuple[str, str]]:
