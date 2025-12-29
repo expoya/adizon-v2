@@ -198,8 +198,20 @@ async def unified_webhook(platform: str, request: Request):
                 print(f"✅ Slack Challenge received: {challenge[:50]}...")
                 print(f"✅ Responding with challenge")
                 return {"challenge": challenge}
+            
+            # 2. Event Deduplication (Slack sendet manchmal doppelte Events)
+            event_id = webhook_data.get("event_id")
+            if event_id:
+                # Check if we've seen this event before
+                cache_key = f"slack:event:{event_id}"
+                if r.exists(cache_key):
+                    print(f"⏭️ Skipping: Duplicate event {event_id}")
+                    return {"status": "ignored", "reason": "duplicate_event"}
+                # Mark event as seen (TTL 10 minutes)
+                r.setex(cache_key, 600, "1")
+                print(f"✅ Event ID: {event_id} (cached)")
         
-        # 2. Get Chat-Adapter
+        # 3. Get Chat-Adapter
         try:
             adapter = get_chat_adapter(platform)
         except ValueError as e:
@@ -209,7 +221,7 @@ async def unified_webhook(platform: str, request: Request):
                 content={"status": "error", "message": str(e)}
             )
         
-        # 3. Parse Message
+        # 4. Parse Message
         try:
             msg = adapter.parse_incoming(webhook_data)
         except WebhookParseError as e:
@@ -219,10 +231,10 @@ async def unified_webhook(platform: str, request: Request):
             print(f"⏭️ Skipping: {error_msg}")
             return {"status": "ignored", "reason": error_msg}
         
-        # 4. Handle Message (Platform-agnostic)
+        # 5. Handle Message (Platform-agnostic)
         response_text = handle_message(msg)
         
-        # 5. Send Response
+        # 6. Send Response
         success = adapter.send_message(msg.chat_id, response_text)
         
         if success:
