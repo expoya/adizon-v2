@@ -11,11 +11,13 @@ from tools.crm import get_crm_tools_for_user
 from agents.session_guard import check_session_status
 from utils.memory import get_conversation_memory, set_session_state
 from utils.agent_config import load_agent_config
+from models.user import User
+from typing import Optional
 import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-def handle_crm(message: str, user_name: str, user_id: str) -> str:
+def handle_crm(message: str, user_name: str, user_id: str, user: Optional[User] = None) -> str:
     try:
         # Load Agent Config from YAML
         config = load_agent_config("crm_handler")
@@ -31,8 +33,8 @@ def handle_crm(message: str, user_name: str, user_id: str) -> str:
             **params  # temperature, top_p, max_tokens, etc.
         )
         
-        # Tools & Memory
-        tools = get_crm_tools_for_user(user_id)
+        # Tools & Memory (mit User-Context für Attribution)
+        tools = get_crm_tools_for_user(user_id, user=user)
         memory = get_conversation_memory(user_id, session_id="main")
         
         # Aktuelles Datum für LLM (Vienna Timezone, eindeutig formatiert)

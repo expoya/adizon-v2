@@ -1,21 +1,30 @@
 # Python
-venv/
 __pycache__/
 *.py[cod]
-*.pyc
+*$py.class
 *.so
 .Python
+venv/
+env/
+ENV/
+.venv
 
-# Environment Variables
+# Environment
 .env
 .env.local
 .env.production
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
 
 # IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
 # OS
 .DS_Store
@@ -24,17 +33,22 @@ Thumbs.db
 # Logs
 *.log
 
+# Frontend (React/Vite)
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+
+# Build
+build/
+dist/
+*.egg-info/
+
 # Testing
 .pytest_cache/
 .coverage
 htmlcov/
 
-# Distribution
-dist/
-build/
-*.egg-info/
-
-# Documentation
-Roadmap/roadmap.md
-Roadmap/changelog.md
-Roadmap/feature-dynamic-field-enrichment.md
+# Alembic
+alembic/versions/*.pyc

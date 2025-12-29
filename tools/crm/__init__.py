@@ -1,6 +1,6 @@
 """
 CRM Tools Factory
-Stellt dem Agenten Tools bereit, die wissen, wer der User ist (für Undo).
+Stellt dem Agenten Tools bereit, die wissen, wer der User ist (für Undo & Attribution).
 """
 import os
 import re
@@ -13,6 +13,12 @@ from typing import Optional
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from utils.memory import save_undo_context, get_undo_context, clear_undo_context
+
+# User Model für Attribution
+try:
+    from models.user import User
+except ImportError:
+    User = None
 
 # .env laden
 current_dir = Path(__file__).resolve().parent
@@ -73,11 +79,20 @@ else:
 
 # === DIE FACTORY (Das Profi-Teil) ===
 
-def get_crm_tools_for_user(user_id: str) -> list:
+def get_crm_tools_for_user(user_id: str, user: Optional['User'] = None) -> list:
     """
     Erstellt ein Tool-Set speziell für diesen User.
     Damit landen Undo-Infos im richtigen Redis-Key.
+    
+    Args:
+        user_id: Platform-spezifische User-ID (für Redis Keys)
+        user: Optional User-Objekt für CRM-Attribution
     """
+    
+    # Attribution Suffix (wird an Notes/Tasks angehängt)
+    attribution = ""
+    if user and hasattr(user, 'crm_display_name'):
+        attribution = f"\n\n---\n_✍️ via {user.crm_display_name}_"
     
     # 1. Helper zum ID lesen (unterstützt UUID und numerische IDs)
     def _extract_id(text):
@@ -127,7 +142,9 @@ def get_crm_tools_for_user(user_id: str) -> list:
             - Wenn du KEINE UUID hast -> Sende den VOR- UND NACHNAMEN (z.B. 'Thomas Braun').
             - RATE KEINE E-MAILS!
         """
-        res = create_task_func(title, body, due_date, target_id)
+        # Add user attribution to body
+        body_with_attribution = (body or "") + attribution
+        res = create_task_func(title, body_with_attribution, due_date, target_id)
         if tid := _extract_id(res): save_undo_context(user_id, "task", tid)
         return res
 
@@ -139,8 +156,9 @@ def get_crm_tools_for_user(user_id: str) -> list:
             - Wenn du KEINE UUID hast -> Sende den VOR- UND NACHNAMEN (z.B. 'Thomas Braun').
             - RATE KEINE E-MAILS!
         """
-
-        res = create_note_func(title, content, target_id)
+        # Add user attribution to content
+        content_with_attribution = content + attribution
+        res = create_note_func(title, content_with_attribution, target_id)
         if nid := _extract_id(res): save_undo_context(user_id, "note", nid)
         return res
         

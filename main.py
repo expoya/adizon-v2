@@ -1,6 +1,6 @@
 """
 Adizon V2 - AI Assistant für KMUs
-Version 3.0 - Chat-Adapter System
+Version 4.0 - User-Management System
 """
 # Environment Variables laden
 from dotenv import load_dotenv
@@ -8,6 +8,7 @@ load_dotenv()
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from openai import OpenAI
 import os
@@ -21,12 +22,43 @@ from tools.chat import get_chat_adapter, StandardMessage
 from tools.chat.interface import WebhookParseError
 from tools.chat.slack_adapter import handle_slack_challenge
 
+# User-Management
+from middleware.auth import AuthMiddleware
+from utils.database import SessionLocal
+from repositories.user_repository import UserRepository
+from services.registration_service import RegistrationService
+from models.user import User
+from typing import Optional
+
+# API Routers
+from api import users_router
+
 # FastAPI App
 app = FastAPI(
     title="Adizon",
-    description="AI Assistant für KMUs - Multi-Platform Chat Adapter",
-    version="3.0.0"
+    description="AI Assistant für KMUs - Multi-Platform Chat Adapter with User-Management",
+    version="4.0.0"
 )
+
+# CORS Configuration (für React Frontend)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",  # Vite default port
+        "http://localhost:3000",  # Alternative port
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Register Auth Middleware
+app.add_middleware(AuthMiddleware)
+
+# Mount API Routers
+app.include_router(users_router)
 
 
 # === PYDANTIC MODELS ===
@@ -103,20 +135,24 @@ def detect_intent(message: str) -> str:
         return "CHAT"
 
 
-def handle_message(msg: StandardMessage) -> str:
+def handle_message(msg: StandardMessage, user: Optional[User] = None) -> str:
     """
-    Platform-agnostic Message Handler.
+    Platform-agnostic Message Handler with User-Context.
     
     Verarbeitet Messages von allen Chat-Plattformen (Telegram, Slack, etc.)
     
     Args:
         msg: StandardMessage mit User-Info und Text
+        user: Authenticated User-Objekt (optional)
         
     Returns:
         Response text
     """
     print(f"\n{'='*50}")
     print(f"💬 [{msg.platform.upper()}] Message from {msg.user_name}: {msg.text}")
+    
+    if user:
+        print(f"👤 Authenticated User: {user.name} ({user.email})")
     
     # 1. KILL SWITCH CHECK
     if msg.text.strip().upper() in ["NEUSTART", "/RESET", "RESET"]:
@@ -130,7 +166,7 @@ def handle_message(msg: StandardMessage) -> str:
     
     if current_state == "ACTIVE":
         print("⏩ Skipping Router (State is ACTIVE) -> Direct to CRM")
-        response_text = handle_crm(msg.text, msg.user_name, msg.user_id)
+        response_text = handle_crm(msg.text, msg.user_name, msg.user_id, user=user)
     else:
         # 3. NORMAL ROUTING (State is IDLE)
         intent = detect_intent(msg.text)
@@ -138,7 +174,7 @@ def handle_message(msg: StandardMessage) -> str:
         if intent == "CHAT":
             response_text = handle_chat(msg.text, msg.user_name)
         elif intent == "CRM":
-            response_text = handle_crm(msg.text, msg.user_name, msg.user_id)
+            response_text = handle_crm(msg.text, msg.user_name, msg.user_id, user=user)
         else:
             response_text = "Error."
     
@@ -244,10 +280,44 @@ async def unified_webhook(platform: str, request: Request):
             print(f"⏭️ Skipping: {error_msg}")
             return {"status": "ignored", "reason": error_msg}
         
-        # 5. Handle Message (Platform-agnostic)
-        response_text = handle_message(msg)
+        # 5. Check Authentication Status
+        user = getattr(request.state, "user", None)
+        is_authenticated = getattr(request.state, "is_authenticated", False)
+        registration_needed = getattr(request.state, "registration_needed", False)
+        registration_pending = getattr(request.state, "registration_pending", False)
         
-        # 6. Send Response
+        # 6. Handle Registration Flow
+        if registration_needed:
+            reg_data = getattr(request.state, "registration_data", {})
+            db = SessionLocal()
+            try:
+                repo = UserRepository(db)
+                reg_service = RegistrationService(repo)
+                _, response_text = reg_service.register_pending_user(
+                    platform=reg_data.get("platform"),
+                    platform_id=reg_data.get("platform_id"),
+                    user_name=reg_data.get("user_name")
+                )
+            finally:
+                db.close()
+        
+        elif registration_pending:
+            response_text = (
+                "⏳ Deine Registrierung wartet noch auf Freischaltung durch den Admin.\n"
+                "Bitte habe noch etwas Geduld!"
+            )
+        
+        elif not is_authenticated:
+            response_text = (
+                "❌ Du bist nicht autorisiert, Adizon zu nutzen.\n"
+                "Bitte kontaktiere den Admin."
+            )
+        
+        else:
+            # 7. Handle Message (Platform-agnostic) - USER IS AUTHENTICATED
+            response_text = handle_message(msg, user=user)
+        
+        # 8. Send Response
         success = adapter.send_message(msg.chat_id, response_text)
         
         if success:
