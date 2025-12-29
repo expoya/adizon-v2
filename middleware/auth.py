@@ -71,11 +71,18 @@ class AuthMiddleware(BaseHTTPMiddleware):
         
         platform_id, user_name = user_info
         
+        print(f"🔎 Auth Middleware: Looking for user...")
+        print(f"   Platform: {platform}")
+        print(f"   Platform ID: {platform_id}")
+        print(f"   User Name: {user_name}")
+        
         # Query DB: Existiert User?
         db = SessionLocal()
         try:
             repo = UserRepository(db)
             user = repo.get_user_by_platform_id(platform, platform_id)
+            
+            print(f"🔎 DB Query Result: {user}")
             
             if user and user.is_approved and user.is_active:
                 # ✅ User ist authorized
