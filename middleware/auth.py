@@ -121,6 +121,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         Returns:
             (platform_id, user_name) oder None
         """
+        print(f"🔎 _extract_user_info called: platform={platform}")
+        
         if platform == "telegram":
             msg = webhook_data.get("message", {})
             from_user = msg.get("from", {})
@@ -136,8 +138,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
             # Slack username müsste via API geholt werden, wir nehmen erstmal die ID
             username = f"Slack User {user_id}"
             
+            print(f"🔎 Slack extraction:")
+            print(f"   Event: {event}")
+            print(f"   User ID: {user_id}")
+            print(f"   Will return: {(user_id, username) if user_id else None}")
+            
             if user_id:
                 return (user_id, username)
         
+        print(f"🔎 _extract_user_info returning None (no match)")
         return None
 
