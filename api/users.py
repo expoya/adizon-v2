@@ -132,7 +132,7 @@ def get_user(
     
     return UserResponse(**user.to_dict())
 
-@router.post("/", response_model=UserResponse, status_code=201)
+@router.post("", response_model=UserResponse, status_code=201)
 def create_user(
     user_data: UserCreate,
     db: Session = Depends(get_db),
