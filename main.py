@@ -214,15 +214,10 @@ async def unified_webhook(platform: str, request: Request):
             msg = adapter.parse_incoming(webhook_data)
         except WebhookParseError as e:
             error_msg = str(e)
-            # Spezial-Handling für bestimmte Fehler
-            if "Ignoring bot message" in error_msg:
-                print(f"⏭️ Skipping: {error_msg}")
-                return {"status": "ignored"}
-            print(f"❌ Webhook Parse Error: {error_msg}")
-            return JSONResponse(
-                status_code=400,
-                content={"status": "error", "message": error_msg}
-            )
+            # WebhookParseError = Expected/Ignorable Events (bot messages, edits, system events)
+            # Wir geben 200 OK zurück, damit Slack nicht retried
+            print(f"⏭️ Skipping: {error_msg}")
+            return {"status": "ignored", "reason": error_msg}
         
         # 4. Handle Message (Platform-agnostic)
         response_text = handle_message(msg)

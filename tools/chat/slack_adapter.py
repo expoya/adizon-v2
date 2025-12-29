@@ -79,8 +79,15 @@ class SlackAdapter(ChatAdapter):
                 raise WebhookParseError("No 'event' field in Slack webhook")
             
             # Skip Bot Messages (avoid loops)
-            if event.get("bot_id"):
+            # Slack kann bot_id, bot_profile, oder subtype="bot_message" senden
+            if event.get("bot_id") or event.get("bot_profile") or event.get("subtype") == "bot_message":
                 raise WebhookParseError("Ignoring bot message (loop prevention)")
+            
+            # Skip Message Subtypes (edits, deletes, etc.)
+            # Diese Events haben oft kein 'user' Feld oder sind nicht relevant
+            subtype = event.get("subtype")
+            if subtype in ["message_changed", "message_deleted", "channel_join", "channel_leave"]:
+                raise WebhookParseError(f"Ignoring Slack subtype: {subtype}")
             
             # Extract User Info
             user_id = event.get("user")
@@ -93,7 +100,8 @@ class SlackAdapter(ChatAdapter):
             
             # Validation
             if not user_id:
-                raise WebhookParseError("Missing 'event.user' in Slack webhook")
+                # Wenn kein user_id vorhanden ist, ist es wahrscheinlich ein System-Event
+                raise WebhookParseError(f"Missing 'event.user' in Slack webhook (event_type: {event.get('type')}, subtype: {event.get('subtype', 'none')})")
             if not channel:
                 raise WebhookParseError("Missing 'event.channel' in Slack webhook")
             if not text:
