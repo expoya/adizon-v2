@@ -29,21 +29,27 @@ class AuthMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         # Endpoints die NICHT authenticated werden müssen
         self.skip_paths = [
-            "/",
             "/docs",
             "/openapi.json",
             "/redoc",
             "/api/users",  # Admin API hat eigene Auth
         ]
+        # Root path wird separat gehandelt
+        self.skip_exact = ["/"]
     
     async def dispatch(self, request: Request, call_next):
         """Main Middleware Logic"""
         
         print(f"🔵🔵🔵 AUTH MIDDLEWARE CALLED: {request.url.path} 🔵🔵🔵")
         
-        # Skip Auth für bestimmte Pfade
+        # Skip Auth für exakte Pfade
+        if request.url.path in self.skip_exact:
+            print(f"⏭️ Skipping auth for exact match: {request.url.path}")
+            return await call_next(request)
+        
+        # Skip Auth für Pfad-Prefixes
         if any(request.url.path.startswith(path) for path in self.skip_paths):
-            print(f"⏭️ Skipping auth for: {request.url.path}")
+            print(f"⏭️ Skipping auth for prefix match: {request.url.path}")
             return await call_next(request)
         
         # Nur Webhooks authenticaten
