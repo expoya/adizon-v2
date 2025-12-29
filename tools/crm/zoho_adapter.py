@@ -307,11 +307,14 @@ class ZohoCRM:
                         display_parts.append(f"@ {company}")
                     if email:
                         display_parts.append(f"<{email}>")
+                    if phone:
+                        display_parts.append(f"📞 {phone}")
                     
                     results.append({
                         'name': full_name,
                         'email': email,
                         'company': company,
+                        'phone': phone,
                         'id': lead_id,
                         'score': best_score,
                         'display': " ".join(display_parts)
