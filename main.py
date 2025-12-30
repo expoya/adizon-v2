@@ -62,6 +62,9 @@ app.add_middleware(AuthMiddleware)
 # Mount API Routers
 app.include_router(users_router)
 
+# === STARTUP: Initialize Whisper Transcriber ===
+from tools.transcription import get_transcriber
+transcriber = get_transcriber()  # Triggers startup logging
 
 # === PYDANTIC MODELS ===
 

@@ -75,7 +75,9 @@ Diese Feature-Liste dokumentiert alle implementierten Funktionen von Adizon V2 f
 | Feature | Status | Beschreibung | Business Impact |
 |---------|--------|--------------|----------------|
 | **Telegram Bot** | ✅ Live | Refactored mit Adapter-Pattern | Mobile Access |
+| **Telegram Voice Messages** | ✅ Live | Whisper Transcription | Voice-Ready |
 | **Slack Integration** | ✅ Live | Team-Collaboration Support | Enterprise-Ready |
+| **Slack Audio Files** | ✅ Live | Whisper Transcription | Voice-Ready |
 | **Unified Webhook** | ✅ Live | Single Endpoint für alle Plattformen | Wartbarkeit |
 | **Event Deduplication** | ✅ Live | Redis-basiert (10 Min TTL) | Keine doppelten Antworten |
 | **Platform-Agnostic Core** | ✅ Live | StandardMessage Format | Einfach erweiterbar |
@@ -247,7 +249,7 @@ Result: Kundenspezifische Felder ohne Code ✅
 
 ### Kurzfristig (Q1 2025)
 - [ ] **Briefing-Modus** - Sales-Prep Zusammenfassung aller Kontakt-Daten
-- [ ] **Voice Input** - Whisper Integration für Sprachnachrichten
+- [x] ✅ **Voice Input** - Whisper Integration für Sprachnachrichten (Live, Telegram + Slack)
 - [x] ✅ **Zoho Adapter** - Production-ready (OAuth 2.0, Live)
 - [x] ✅ **Slack Integration** - Team Collaboration (Live)
 - [ ] **MS Teams Adapter** - Enterprise-Kunden Fokus
@@ -316,6 +318,6 @@ Result: Kundenspezifische Felder ohne Code ✅
 
 ---
 
-**Letzte Aktualisierung:** 29.12.2025  
-**Version:** 2.3 (Multi-Platform Chat Support)
+**Letzte Aktualisierung:** 30.12.2025  
+**Version:** 2.4 (Voice Transcription Support)
 

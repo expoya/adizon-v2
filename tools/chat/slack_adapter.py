@@ -4,6 +4,7 @@ Implementierung für Slack Bot API
 """
 
 import os
+import uuid
 import requests
 from typing import Optional, Dict, Any
 from .interface import ChatAdapter, StandardMessage, WebhookParseError, MessageSendError
@@ -95,11 +96,26 @@ class SlackAdapter(ChatAdapter):
             # Extract User Info
             user_id = event.get("user")
             
-            # Extract Message Text
-            text = event.get("text", "")
-            
             # Extract Channel Info (for replies)
             channel = event.get("channel")
+            
+            # === TEXT OR AUDIO? ===
+            text = None
+            
+            # Check for Audio Files
+            files = event.get("files", [])
+            if files and len(files) > 0:
+                # Check if any file is audio
+                first_file = files[0]
+                mimetype = first_file.get("mimetype", "")
+                
+                if mimetype.startswith("audio/"):
+                    print("🎤 Audio file detected (Slack)")
+                    text = self._handle_audio_file(first_file)
+            
+            # Fallback to Text Message
+            if not text:
+                text = event.get("text", "")
             
             # Validation
             if not user_id:
@@ -108,7 +124,7 @@ class SlackAdapter(ChatAdapter):
             if not channel:
                 raise WebhookParseError("Missing 'event.channel' in Slack webhook")
             if not text:
-                raise WebhookParseError("Missing 'event.text' in Slack webhook")
+                raise WebhookParseError("Missing 'event.text' or audio file in Slack webhook")
             
             # Get User Name via Slack API (optional, can be cached)
             user_name = self._get_user_name(user_id)
@@ -229,6 +245,114 @@ class SlackAdapter(ChatAdapter):
         except Exception as e:
             print(f"⚠️ Failed to get Slack user name: {e}")
             return "Unknown"
+    
+    # === AUDIO FILE HANDLING ===
+    
+    def _handle_audio_file(self, file_data: dict) -> str:
+        """
+        Handles Slack audio file: Download → Transcribe → Cleanup
+        
+        Args:
+            file_data: Slack file object with url_private, mimetype, size, etc.
+            
+        Returns:
+            Transcribed text
+            
+        Raises:
+            WebhookParseError: If transcription fails
+        """
+        file_id = file_data.get("id")
+        file_url = file_data.get("url_private")
+        mimetype = file_data.get("mimetype", "audio/*")
+        size = file_data.get("size", 0)
+        
+        if not file_url:
+            raise WebhookParseError("Missing 'url_private' in Slack audio file")
+        
+        print(f"🎤 Processing audio file: {mimetype}, {size} bytes, id={file_id}")
+        
+        # Download audio file
+        audio_path = None
+        try:
+            audio_path = self._download_audio_file(file_url, mimetype)
+            print(f"✅ Audio downloaded: {audio_path}")
+            
+            # Transcribe
+            from tools.transcription import get_transcriber
+            transcriber = get_transcriber()
+            
+            if not transcriber.is_enabled():
+                raise WebhookParseError(
+                    "🚫 Audio-Nachrichten sind aktuell nicht verfügbar. "
+                    "Bitte schreibe eine Textnachricht."
+                )
+            
+            result = transcriber.transcribe(audio_path)
+            print(f"✅ Transcription: '{result.text[:50]}...'")
+            
+            return result.text
+            
+        except Exception as e:
+            print(f"❌ Audio transcription failed: {e}")
+            raise WebhookParseError(
+                "❌ Audio-Nachricht konnte nicht verarbeitet werden. "
+                "Bitte versuche es nochmal oder schreibe eine Textnachricht."
+            )
+        
+        finally:
+            # Cleanup: Delete temp file
+            if audio_path and os.path.exists(audio_path):
+                try:
+                    os.remove(audio_path)
+                    print(f"🗑️  Temp file deleted: {audio_path}")
+                except Exception as e:
+                    print(f"⚠️  Failed to delete temp file: {e}")
+    
+    def _download_audio_file(self, file_url: str, mimetype: str) -> str:
+        """
+        Download Slack audio file to /tmp
+        
+        Slack requires OAuth Bearer Token for url_private downloads.
+        
+        Args:
+            file_url: Slack url_private (requires authentication)
+            mimetype: File MIME type (e.g., "audio/mp3", "audio/wav")
+            
+        Returns:
+            Path to downloaded file in /tmp
+            
+        Raises:
+            Exception: If download fails
+        """
+        # Extract file extension from mimetype
+        # audio/mp3 → mp3, audio/wav → wav, audio/mpeg → mp3
+        ext = "mp3"  # default
+        if "/" in mimetype:
+            ext_map = {
+                "audio/mp3": "mp3",
+                "audio/mpeg": "mp3",
+                "audio/wav": "wav",
+                "audio/ogg": "ogg",
+                "audio/m4a": "m4a",
+                "audio/x-m4a": "m4a"
+            }
+            ext = ext_map.get(mimetype, mimetype.split("/")[1])
+        
+        # Download with OAuth Bearer Token
+        headers = {"Authorization": f"Bearer {self.bot_token}"}
+        response = requests.get(file_url, headers=headers, timeout=30)
+        
+        if response.status_code != 200:
+            raise Exception(f"Slack file download failed: {response.status_code} {response.text}")
+        
+        # Save to /tmp with unique name
+        unique_id = uuid.uuid4().hex[:8]
+        temp_path = f"/tmp/slack_audio_{unique_id}.{ext}"
+        
+        with open(temp_path, "wb") as f:
+            f.write(response.content)
+        
+        return temp_path
 
 
 # === HELPER FUNCTIONS ===
