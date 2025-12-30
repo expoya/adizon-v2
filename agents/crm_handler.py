@@ -2,8 +2,8 @@
 Adizon - CRM Handler
 """
 from langchain_openai import ChatOpenAI
-from langchain.agents import create_react_agent, AgentExecutor
-from langchain.prompts import PromptTemplate
+from langchain.agents import create_structured_chat_agent, AgentExecutor
+from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 # Importiert nur die Factory!
 from tools.crm import get_crm_tools_for_user
@@ -62,35 +62,48 @@ def handle_crm(message: str, user_name: str, user_id: str, user: Optional[User] 
             current_date=current_date_full
         )
 
-        # ReAct Prompt Template (text-basiert, funktioniert mit jedem LLM!)
-        prompt = PromptTemplate.from_template(
-            system_prompt + """
+        # Structured Chat Agent Prompt (funktioniert mit jedem LLM!)
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_prompt + """
 
-Du hast Zugriff auf folgende Tools:
+Du hast Zugriff auf diese Tools:
 
 {tools}
 
-Nutze dieses Format:
+Nutze JSON Blobs für Tool-Aufrufe:
+```
+{{
+  "action": "tool_name",
+  "action_input": "input_value"
+}}
+```
 
-Question: Die Frage oder Aufgabe des Users
-Thought: Überlege, was zu tun ist
-Action: Das Tool, das du nutzen möchtest (eins von: [{tool_names}])
-Action Input: Der Input für das Tool (als JSON)
-Observation: Das Resultat des Tools
-... (Thought/Action/Action Input/Observation kann sich wiederholen)
-Thought: Ich weiß jetzt die Antwort
-Final Answer: Die finale Antwort an den User (auf Deutsch!)
+Befolge IMMER dieses Format:
 
-Beginne!
+Question: Die User-Frage
+Thought: Deine Überlegung
+Action:
+```
+{{
+  "action": "$TOOL_NAME",
+  "action_input": "$INPUT"
+}}
+```
+Observation: Das Tool-Resultat
+... (Thought/Action/Observation kann sich wiederholen)
+Thought: Ich habe genug Infos
+Final Answer: Deine Antwort auf Deutsch
 
-Question: {input}
-Thought: {agent_scratchpad}"""
-        )
+Beginne!"""),
+            MessagesPlaceholder(variable_name="chat_history", optional=True),
+            ("human", "{input}"),
+            ("ai", "{agent_scratchpad}")
+        ])
         
         # Agent Config aus YAML
         agent_config = config.get_agent_config()
         
-        agent = create_react_agent(llm, tools, prompt)
+        agent = create_structured_chat_agent(llm, tools, prompt)
         agent_executor = AgentExecutor(
             agent=agent, 
             tools=tools, 
