@@ -2,7 +2,8 @@
 Adizon - CRM Handler
 """
 from langchain_openai import ChatOpenAI
-from langchain.agents import create_structured_chat_agent, AgentExecutor
+from langchain.agents import AgentExecutor
+from langchain.agents.structured_chat.base import StructuredChatAgent
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import RedisChatMessageHistory
@@ -13,6 +14,7 @@ from tools.crm import get_crm_tools_for_user
 from agents.session_guard import check_session_status
 from utils.memory import set_session_state
 from utils.agent_config import load_agent_config
+from utils.ministral_parser import MinistralOutputParser  # Custom Parser!
 from models.user import User
 from typing import Optional
 import os
@@ -125,14 +127,25 @@ STARTE JETZT!"""),
         # Agent Config aus YAML
         agent_config = config.get_agent_config()
         
-        agent = create_structured_chat_agent(llm, tools, prompt)
+        # Custom Parser for Ministral (tolerant to format variations)
+        output_parser = MinistralOutputParser()
+        
+        # Create agent with custom parser (using from_llm_and_tools)
+        agent = StructuredChatAgent.from_llm_and_tools(
+            llm=llm,
+            tools=tools,
+            prompt=prompt,
+            output_parser=output_parser,
+            handle_parsing_errors=True
+        )
+        
         agent_executor = AgentExecutor(
             agent=agent, 
             tools=tools, 
             verbose=agent_config.get('verbose', True),
-            handle_parsing_errors=True,  # Auto-retry on parsing errors
-            max_iterations=3,  # Reduce from 5 to 3 (faster failures)
-            max_execution_time=60  # 60 second timeout (prevent infinite loops)
+            handle_parsing_errors=True,  # Still handle edge cases
+            max_iterations=3,  # Reduced iterations
+            max_execution_time=60  # 60 second timeout
         )
         
         # Wrap Agent with Message History (neue Memory API!)
