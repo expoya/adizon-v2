@@ -33,15 +33,26 @@ def check_session_status(last_ai_response: str, user_message: str) -> str:
             last_ai_response=last_ai_response
         )
 
+        messages = [
+            {"role": "system", "content": system_prompt}
+        ]
+        
+        print(f"\n📤 === LLM REQUEST (Session Guard) ===")
+        print(f"System Prompt: {system_prompt[:300]}...")
+        print(f"======================================\n")
+        
         response = client.chat.completions.create(
             model=model_config['name'],
-            messages=[
-                {"role": "system", "content": system_prompt}
-            ],
+            messages=messages,
             **params
         )
         
         decision = response.choices[0].message.content.strip().upper()
+        
+        print(f"\n📥 === LLM RESPONSE (Session Guard) ===")
+        print(f"Decision: {decision}")
+        print(f"Tokens Used: {response.usage.total_tokens if response.usage else 'N/A'}")
+        print(f"=======================================\n")
         
         # Fallback für Sicherheit
         if "ACTIVE" in decision:

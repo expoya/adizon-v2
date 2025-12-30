@@ -105,20 +105,31 @@ def detect_intent(message: str) -> str:
         # System Prompt aus YAML
         system_prompt = config.get_system_prompt()
         
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": message}
+        ]
+        
+        print(f"\n📤 === LLM REQUEST (Intent Detection) ===")
+        print(f"System Prompt: {system_prompt[:300]}...")
+        print(f"User Message: {message}")
+        print(f"==========================================\n")
+        
         response = client.chat.completions.create(
             model=model_config['name'],
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": message}
-            ],
+            messages=messages,
             **params
         )
-        
-        print(f"✅ API Call successful")
         
         # Content auslesen
         content = response.choices[0].message.content or ""
         
+        print(f"\n📥 === LLM RESPONSE (Intent Detection) ===")
+        print(f"Raw Response: {content}")
+        print(f"Tokens Used: {response.usage.total_tokens if response.usage else 'N/A'}")
+        print(f"==========================================\n")
+        
+        print(f"✅ API Call successful")
         print(f"🎯 Raw Intent: '{content}'")
         print(f"🔍 === INTENT DETECTION END ===\n")
         

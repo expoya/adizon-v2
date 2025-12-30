@@ -66,7 +66,7 @@ def handle_crm(message: str, user_name: str, user_id: str, user: Optional[User] 
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_prompt + """
 
-Du hast Zugriff auf diese Tools:
+Du hast Zugriff auf diese Tools: {tool_names}
 
 {tools}
 
@@ -113,7 +113,15 @@ Beginne!"""),
             max_iterations=agent_config.get('max_iterations', 5)
         )
         
+        print(f"\n🤖 === CRM AGENT EXECUTION START ===")
+        print(f"📝 User Input: {message}")
+        print(f"🔧 Available Tools: {[tool.name for tool in tools]}")
+        
         response = agent_executor.invoke({"input": message})
+        
+        print(f"✅ Agent finished")
+        print(f"📤 Final Output: {response.get('output', 'N/A')[:200]}...")
+        print(f"🤖 === CRM AGENT EXECUTION END ===\n")
         final_output = response['output']
 
         # Session Guard

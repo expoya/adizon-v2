@@ -37,16 +37,28 @@ def handle_chat(message: str, user_name: str) -> str:
 
         print(f"💬 Adizon (Chat) processing: {message[:50]}...")
         
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": message}
+        ]
+        
+        print(f"\n📤 === LLM REQUEST (Chat Handler) ===")
+        print(f"System Prompt: {system_prompt[:300]}...")
+        print(f"User Message: {message}")
+        print(f"======================================\n")
+        
         response = client.chat.completions.create(
             model=model_config['name'],
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": message}
-            ],
+            messages=messages,
             **params  # temperature, top_p, max_tokens, etc.
         )
         
         ai_response = response.choices[0].message.content
+        
+        print(f"\n📥 === LLM RESPONSE (Chat Handler) ===")
+        print(f"AI Response: {ai_response}")
+        print(f"Tokens Used: {response.usage.total_tokens if response.usage else 'N/A'}")
+        print(f"======================================\n")
         
         if not ai_response:
             return f"Hey {user_name}! Ich bin gerade etwas verwirrt. Kannst du das anders formulieren?"
