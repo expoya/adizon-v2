@@ -5,11 +5,11 @@ name: "Chat Handler"
 description: "Freundlicher Gesprächspartner für Smalltalk und Begrüßungen"
 version: "1.0"
 
-# LLM Configuration
+# LLM Configuration (Self-hosted Ministral on trooper.ai)
 model:
-  name: "${MODEL_NAME}"
-  base_url: "${OPENROUTER_BASE_URL}"
-  api_key: "${OPENROUTER_API_KEY}"
+  name: "${BASIC_LLM_MODEL_NAME}"
+  base_url: "${BASIC_LLM_URL}"
+  api_key: "${BASIC_LLM_KEY}"
 
 # LLM Parameters
 parameters:
