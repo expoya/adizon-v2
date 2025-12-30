@@ -11,12 +11,12 @@ model:
   base_url: "${BASIC_LLM_URL}"
   api_key: "${BASIC_LLM_KEY}"
 
-# LLM Parameters
+# LLM Parameters (optimized for structured output)
 parameters:
-  temperature: 0.4
+  temperature: 0.1  # Low temp for consistent format
   top_p: 0.9
   top_k: null
-  max_tokens: 1000
+  max_tokens: 500  # Reduced for faster responses
   presence_penalty: 0.0
   frequency_penalty: 0.0
 

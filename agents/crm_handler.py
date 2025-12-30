@@ -75,39 +75,48 @@ def handle_crm(message: str, user_name: str, user_id: str, user: Optional[User] 
             current_date=current_date_full
         )
 
-        # Structured Chat Agent Prompt (funktioniert mit jedem LLM!)
+        # Optimized Prompt for Ministral (text-based reasoning)
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_prompt + """
 
-Du hast Zugriff auf diese Tools: {tool_names}
+VERFÜGBARE TOOLS: {tool_names}
 
 {tools}
 
-Nutze JSON Blobs für Tool-Aufrufe:
-```
-{{
-  "action": "tool_name",
-  "action_input": "input_value"
-}}
-```
+WICHTIG: Du MUSST für JEDE Anfrage ein strukturiertes Format nutzen!
 
-Befolge IMMER dieses Format:
+FORMAT (EXAKT SO):
 
-Question: Die User-Frage
-Thought: Deine Überlegung
+Thought: [Deine Überlegung was zu tun ist]
 Action:
+```json
+{{"action": "tool_name", "action_input": "parameter"}}
 ```
-{{
-  "action": "$TOOL_NAME",
-  "action_input": "$INPUT"
-}}
-```
-Observation: Das Tool-Resultat
-... (Thought/Action/Observation kann sich wiederholen)
-Thought: Ich habe genug Infos
-Final Answer: Deine Antwort auf Deutsch
 
-Beginne!"""),
+ODER falls keine Tools nötig:
+
+Thought: [Erklärung warum keine Tools nötig]
+Final Answer: [Deine Antwort auf Deutsch]
+
+REGELN:
+1. NIEMALS Markdown-Formatierung (**text**) verwenden
+2. IMMER mit "Thought:" beginnen
+3. JSON MUSS valid sein (double quotes!)
+4. "action_input" ist IMMER ein String
+5. Bei Begrüßungen: Direkt "Final Answer:" ohne Tools
+
+BEISPIEL (Begrüßung):
+Thought: User grüßt nur, keine CRM-Aktion nötig
+Final Answer: Servus Michael! Wie kann ich helfen?
+
+BEISPIEL (Tool-Nutzung):
+Thought: User möchte nach "Expoya" suchen
+Action:
+```json
+{{"action": "search_contacts", "action_input": "Expoya"}}
+```
+
+STARTE JETZT!"""),
             MessagesPlaceholder(variable_name="chat_history", optional=True),
             ("human", "{input}"),
             ("ai", "{agent_scratchpad}")
@@ -121,8 +130,9 @@ Beginne!"""),
             agent=agent, 
             tools=tools, 
             verbose=agent_config.get('verbose', True),
-            handle_parsing_errors=agent_config.get('handle_parsing_errors', True),
-            max_iterations=agent_config.get('max_iterations', 5)
+            handle_parsing_errors=True,  # Auto-retry on parsing errors
+            max_iterations=3,  # Reduce from 5 to 3 (faster failures)
+            max_execution_time=60  # 60 second timeout (prevent infinite loops)
         )
         
         # Wrap Agent with Message History (neue Memory API!)
