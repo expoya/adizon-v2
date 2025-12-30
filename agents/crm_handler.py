@@ -4,12 +4,14 @@ Adizon - CRM Handler
 from langchain_openai import ChatOpenAI
 from langchain.agents import create_structured_chat_agent, AgentExecutor
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_community.chat_message_histories import RedisChatMessageHistory
 
 # Importiert nur die Factory!
 from tools.crm import get_crm_tools_for_user
 
 from agents.session_guard import check_session_status
-from utils.memory import get_conversation_memory, set_session_state
+from utils.memory import set_session_state
 from utils.agent_config import load_agent_config
 from models.user import User
 from typing import Optional
@@ -36,9 +38,17 @@ def handle_crm(message: str, user_name: str, user_id: str, user: Optional[User] 
         # Tools (mit User-Context für Attribution)
         tools = get_crm_tools_for_user(user_id, user=user)
         
-        # MEMORY TEMPORARILY DISABLED (deprecated ConversationBufferMemory breaks Structured Chat Agent)
-        # TODO: Migrate to new LangChain Memory API (RunnableWithMessageHistory)
-        # memory = get_conversation_memory(user_id, session_id="main")
+        # Redis Memory (neue LangChain API - kompatibel mit Structured Chat Agent!)
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        session_key = f"adizon:conversation:{user_id}:main"
+        
+        def get_message_history(session_id: str):
+            """Factory function für Redis Message History"""
+            return RedisChatMessageHistory(
+                session_id=session_id,
+                url=redis_url,
+                ttl=86400  # 24 Stunden TTL
+            )
         
         # Aktuelles Datum für LLM (Vienna Timezone, eindeutig formatiert)
         now = datetime.now(ZoneInfo("Europe/Vienna"))
@@ -110,17 +120,28 @@ Beginne!"""),
         agent_executor = AgentExecutor(
             agent=agent, 
             tools=tools, 
-            # memory=memory,  # DISABLED: Not compatible with Structured Chat Agent
             verbose=agent_config.get('verbose', True),
             handle_parsing_errors=agent_config.get('handle_parsing_errors', True),
             max_iterations=agent_config.get('max_iterations', 5)
         )
         
+        # Wrap Agent with Message History (neue Memory API!)
+        agent_with_memory = RunnableWithMessageHistory(
+            agent_executor,
+            get_message_history,
+            input_messages_key="input",
+            history_messages_key="chat_history",
+        )
+        
         print(f"\n🤖 === CRM AGENT EXECUTION START ===")
         print(f"📝 User Input: {message}")
         print(f"🔧 Available Tools: {[tool.name for tool in tools]}")
+        print(f"💾 Memory Session: {session_key}")
         
-        response = agent_executor.invoke({"input": message})
+        response = agent_with_memory.invoke(
+            {"input": message},
+            config={"configurable": {"session_id": session_key}}
+        )
         
         print(f"✅ Agent finished")
         print(f"📤 Final Output: {response.get('output', 'N/A')[:200]}...")
