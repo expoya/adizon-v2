@@ -33,9 +33,12 @@ def handle_crm(message: str, user_name: str, user_id: str, user: Optional[User] 
             **params  # temperature, top_p, max_tokens, etc.
         )
         
-        # Tools & Memory (mit User-Context für Attribution)
+        # Tools (mit User-Context für Attribution)
         tools = get_crm_tools_for_user(user_id, user=user)
-        memory = get_conversation_memory(user_id, session_id="main")
+        
+        # MEMORY TEMPORARILY DISABLED (deprecated ConversationBufferMemory breaks Structured Chat Agent)
+        # TODO: Migrate to new LangChain Memory API (RunnableWithMessageHistory)
+        # memory = get_conversation_memory(user_id, session_id="main")
         
         # Aktuelles Datum für LLM (Vienna Timezone, eindeutig formatiert)
         now = datetime.now(ZoneInfo("Europe/Vienna"))
@@ -107,7 +110,7 @@ Beginne!"""),
         agent_executor = AgentExecutor(
             agent=agent, 
             tools=tools, 
-            memory=memory, 
+            # memory=memory,  # DISABLED: Not compatible with Structured Chat Agent
             verbose=agent_config.get('verbose', True),
             handle_parsing_errors=agent_config.get('handle_parsing_errors', True),
             max_iterations=agent_config.get('max_iterations', 5)
