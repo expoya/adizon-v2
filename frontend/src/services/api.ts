@@ -4,7 +4,14 @@
 
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// Auto-fix: Add https:// if missing
+let apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+if (apiUrl && !apiUrl.startsWith('http://') && !apiUrl.startsWith('https://')) {
+  apiUrl = `https://${apiUrl}`;
+  console.log('⚠️  Added https:// to API URL');
+}
+
+const API_BASE_URL = apiUrl;
 const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN || 'your_admin_token_here';
 
 // DEBUG: Log the actual values being used
