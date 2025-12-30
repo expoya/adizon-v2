@@ -170,9 +170,9 @@ class WhisperTranscriber:
                 if self.api_key:
                     headers['Authorization'] = f'Bearer {self.api_key}'
                 
-                # Make request
+                # Make request (API URL should be complete endpoint)
                 response = requests.post(
-                    f"{self.api_url}/transcribe",
+                    self.api_url,
                     files=files,
                     data=data,
                     headers=headers,
