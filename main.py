@@ -48,7 +48,8 @@ app.add_middleware(
         "http://localhost:3000",  # Alternative port (local dev)
         "http://127.0.0.1:5173",
         "http://127.0.0.1:3000",
-        "https://adizon-frontend-production.up.railway.app",  # Railway Production Frontend
+        "https://adizon-frontend-production.up.railway.app",  # Railway Production Frontend (old)
+        "https://adizon-frontend-production-ddda.up.railway.app",  # Railway Production Frontend (new)
         # Add more Railway frontends here if you have multiple environments
     ],
     allow_credentials=True,
