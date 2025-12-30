@@ -2,8 +2,8 @@
 Adizon - CRM Handler
 """
 from langchain_openai import ChatOpenAI
-from langchain.agents import create_tool_calling_agent, AgentExecutor
-from langchain.prompts import ChatPromptTemplate
+from langchain.agents import create_react_agent, AgentExecutor
+from langchain.prompts import PromptTemplate
 
 # Importiert nur die Factory!
 from tools.crm import get_crm_tools_for_user
@@ -62,17 +62,35 @@ def handle_crm(message: str, user_name: str, user_id: str, user: Optional[User] 
             current_date=current_date_full
         )
 
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", system_prompt),
-            ("placeholder", "{chat_history}"),
-            ("human", "{input}"),
-            ("placeholder", "{agent_scratchpad}")
-        ])
+        # ReAct Prompt Template (text-basiert, funktioniert mit jedem LLM!)
+        prompt = PromptTemplate.from_template(
+            system_prompt + """
+
+Du hast Zugriff auf folgende Tools:
+
+{tools}
+
+Nutze dieses Format:
+
+Question: Die Frage oder Aufgabe des Users
+Thought: Überlege, was zu tun ist
+Action: Das Tool, das du nutzen möchtest (eins von: [{tool_names}])
+Action Input: Der Input für das Tool (als JSON)
+Observation: Das Resultat des Tools
+... (Thought/Action/Action Input/Observation kann sich wiederholen)
+Thought: Ich weiß jetzt die Antwort
+Final Answer: Die finale Antwort an den User (auf Deutsch!)
+
+Beginne!
+
+Question: {input}
+Thought: {agent_scratchpad}"""
+        )
         
         # Agent Config aus YAML
         agent_config = config.get_agent_config()
         
-        agent = create_tool_calling_agent(llm, tools, prompt)
+        agent = create_react_agent(llm, tools, prompt)
         agent_executor = AgentExecutor(
             agent=agent, 
             tools=tools, 
