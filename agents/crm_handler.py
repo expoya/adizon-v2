@@ -2,9 +2,8 @@
 Adizon - CRM Handler
 """
 from langchain_openai import ChatOpenAI
-from langchain.agents import AgentExecutor
-from langchain.agents.structured_chat.base import StructuredChatAgent
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.agents import AgentExecutor, create_react_agent
+from langchain.prompts import PromptTemplate
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import RedisChatMessageHistory
 
@@ -14,7 +13,6 @@ from tools.crm import get_crm_tools_for_user
 from agents.session_guard import check_session_status
 from utils.memory import set_session_state
 from utils.agent_config import load_agent_config
-from utils.ministral_parser import MinistralOutputParser  # Custom Parser!
 from models.user import User
 from typing import Optional
 import os
@@ -77,75 +75,53 @@ def handle_crm(message: str, user_name: str, user_id: str, user: Optional[User] 
             current_date=current_date_full
         )
 
-        # Optimized Prompt for Ministral (text-based reasoning)
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", system_prompt + """
+        # ReAct Prompt (Standard LangChain Format - funktioniert mit ALLEN LLMs!)
+        prompt = PromptTemplate.from_template(
+            system_prompt + """
 
-VERFÜGBARE TOOLS: {tool_names}
+Du hast Zugriff auf folgende Tools:
 
 {tools}
 
-WICHTIG: Du MUSST für JEDE Anfrage ein strukturiertes Format nutzen!
+Nutze folgendes Format:
 
-FORMAT (EXAKT SO):
+Question: Die Frage oder Anfrage des Users
+Thought: Überlege was zu tun ist
+Action: Der Tool-Name (einer von [{tool_names}])
+Action Input: Der Input für das Tool (als String)
+Observation: Das Ergebnis des Tools
+... (Thought/Action/Action Input/Observation kann sich wiederholen)
+Thought: Ich habe genug Informationen für die finale Antwort
+Final Answer: Die finale Antwort auf Deutsch
 
-Thought: [Deine Überlegung was zu tun ist]
-Action:
-```json
-{{"action": "tool_name", "action_input": "parameter"}}
-```
+WICHTIG:
+- Bei Begrüßungen DIREKT "Final Answer:" (keine Tools nötig!)
+- Action Input ist IMMER ein einfacher String (kein JSON!)
+- Antworte IMMER auf Deutsch
 
-ODER falls keine Tools nötig:
+Beginne!
 
-Thought: [Erklärung warum keine Tools nötig]
-Final Answer: [Deine Antwort auf Deutsch]
-
-REGELN:
-1. NIEMALS Markdown-Formatierung (**text**) verwenden
-2. IMMER mit "Thought:" beginnen
-3. JSON MUSS valid sein (double quotes!)
-4. "action_input" ist IMMER ein String
-5. Bei Begrüßungen: Direkt "Final Answer:" ohne Tools
-
-BEISPIEL (Begrüßung):
-Thought: User grüßt nur, keine CRM-Aktion nötig
-Final Answer: Servus Michael! Wie kann ich helfen?
-
-BEISPIEL (Tool-Nutzung):
-Thought: User möchte nach "Expoya" suchen
-Action:
-```json
-{{"action": "search_contacts", "action_input": "Expoya"}}
-```
-
-STARTE JETZT!"""),
-            MessagesPlaceholder(variable_name="chat_history", optional=True),
-            ("human", "{input}"),
-            ("ai", "{agent_scratchpad}")
-        ])
+Question: {input}
+Thought: {agent_scratchpad}"""
+        )
         
         # Agent Config aus YAML
         agent_config = config.get_agent_config()
         
-        # Custom Parser for Ministral (tolerant to format variations)
-        output_parser = MinistralOutputParser()
-        
-        # Create agent with custom parser (using from_llm_and_tools)
-        agent = StructuredChatAgent.from_llm_and_tools(
+        # ReAct Agent (kein Custom Parser nötig!)
+        agent = create_react_agent(
             llm=llm,
             tools=tools,
-            prompt=prompt,
-            output_parser=output_parser,
-            handle_parsing_errors=True
+            prompt=prompt
         )
         
         agent_executor = AgentExecutor(
             agent=agent, 
             tools=tools, 
             verbose=agent_config.get('verbose', True),
-            handle_parsing_errors=True,  # Still handle edge cases
-            max_iterations=3,  # Reduced iterations
-            max_execution_time=60  # 60 second timeout
+            handle_parsing_errors=True,
+            max_iterations=agent_config.get('max_iterations', 5),
+            max_execution_time=agent_config.get('max_execution_time', 60)
         )
         
         # Wrap Agent with Message History (neue Memory API!)
