@@ -52,8 +52,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
             print(f"⏭️ Skipping auth for prefix match: {request.url.path}")
             return await call_next(request)
         
-        # Nur Webhooks authenticaten
-        if not request.url.path.startswith("/webhook/"):
+        # Nur Webhooks authenticaten (inkl. Legacy-Endpoints)
+        webhook_paths = ["/webhook/", "/telegram-webhook", "/slack-webhook"]
+        if not any(request.url.path.startswith(path) for path in webhook_paths):
             return await call_next(request)
         
         # Parse Webhook Data
@@ -73,10 +74,18 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Extrahiere Platform & User-ID
         # WICHTIG: request.path_params existiert in Middleware noch nicht!
         # Wir müssen Platform aus dem URL-Path parsen
-        path = request.url.path  # z.B. "/webhook/slack"
+        path = request.url.path  # z.B. "/webhook/slack" oder "/telegram-webhook"
         platform = None
+        
         if path.startswith("/webhook/"):
+            # Neues Format: /webhook/telegram oder /webhook/slack
             platform = path.split("/")[2] if len(path.split("/")) > 2 else None
+        elif path == "/telegram-webhook":
+            # Legacy Format
+            platform = "telegram"
+        elif path == "/slack-webhook":
+            # Legacy Format
+            platform = "slack"
         
         print(f"🔎 Auth Middleware: Extracting platform from path: {path} → {platform}")
         
