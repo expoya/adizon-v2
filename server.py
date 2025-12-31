@@ -8,7 +8,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
@@ -121,7 +121,7 @@ app.include_router(users_router)
 # === WEBHOOK ENDPOINT ===
 
 @app.post("/webhook/{platform}")
-async def webhook(platform: str, request: Request):
+async def webhook(platform: str, request: Request, background_tasks: BackgroundTasks):
     """
     Universeller Webhook für alle Chat-Plattformen.
     
@@ -132,12 +132,19 @@ async def webhook(platform: str, request: Request):
         Platform-spezifisches Webhook-Format
         
     Returns:
-        {"ok": True} bei Erfolg
+        {"ok": True} bei Erfolg (sofort, Verarbeitung im Hintergrund)
     """
     global graph, checkpointer
     
     if not graph:
         raise HTTPException(status_code=503, detail="Graph not initialized")
+    
+    # Slack Retry Detection - ignoriere Retries
+    # Slack sendet Webhooks erneut, wenn wir nicht innerhalb 3s antworten
+    retry_num = request.headers.get("X-Slack-Retry-Num")
+    if retry_num:
+        print(f"⏭️ Ignoring Slack retry #{retry_num}")
+        return {"ok": True}
     
     try:
         body = await request.json()
