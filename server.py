@@ -44,8 +44,12 @@ async def lifespan(app: FastAPI):
     print("🚀 Starting Adizon Server...")
     
     # PostgreSQL Pool für Checkpointing
-    # Konvertiere SQLAlchemy URL zu psycopg Format
+    # Konvertiere SQLAlchemy URL zu nativem psycopg/libpq Format
+    # SQLAlchemy: postgresql+psycopg://... -> libpq: postgresql://...
     pg_url = DATABASE_URL
+    if "+psycopg" in pg_url:
+        pg_url = pg_url.replace("+psycopg", "")
+    # Manche Tools erwarten postgres:// statt postgresql://
     if pg_url.startswith("postgresql://"):
         pg_url = pg_url.replace("postgresql://", "postgres://", 1)
     
