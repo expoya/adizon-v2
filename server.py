@@ -64,14 +64,14 @@ async def lifespan(app: FastAPI):
         )
         await pool.open()
         
-        # Checkpointer mit Pool
-        checkpointer = AsyncPostgresSaver(pool)
-        
-        # Checkpointer-Tabellen erstellen
-        # Note: setup() benötigt autocommit wegen CREATE INDEX CONCURRENTLY
+        # Checkpointer-Tabellen erstellen mit autocommit (wegen CREATE INDEX CONCURRENTLY)
         import psycopg
         async with await psycopg.AsyncConnection.connect(pg_url, autocommit=True) as setup_conn:
-            await AsyncPostgresSaver.create_tables(setup_conn)
+            setup_checkpointer = AsyncPostgresSaver(setup_conn)
+            await setup_checkpointer.setup()
+        
+        # Jetzt den echten Checkpointer mit dem Pool erstellen
+        checkpointer = AsyncPostgresSaver(pool)
         
         print("✅ PostgreSQL Checkpointer initialized")
         

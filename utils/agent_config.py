@@ -63,16 +63,31 @@ class AgentConfig:
         elif isinstance(obj, list):
             return [self._substitute_env_vars(item) for item in obj]
         elif isinstance(obj, str):
-            # Ersetzt ${VAR_NAME} durch os.getenv("VAR_NAME")
+            # Ersetzt ${VAR_NAME} oder ${VAR_NAME:-default} oder ${VAR:-${OTHER_VAR}}
             def replacer(match):
-                var_name = match.group(1)
-                value = os.getenv(var_name)
-                if value is None:
-                    print(f"⚠️ Environment Variable nicht gefunden: {var_name}")
-                    return match.group(0)  # Original beibehalten
-                return value
+                full_expr = match.group(1)
+                
+                # Check for default value syntax: VAR:-default or VAR:-${OTHER_VAR}
+                if ":-" in full_expr:
+                    var_name, default = full_expr.split(":-", 1)
+                    value = os.getenv(var_name.strip())
+                    if value is None or value == "":
+                        # Default kann auch eine andere Env-Var sein: ${OTHER_VAR}
+                        if default.startswith("${") and default.endswith("}"):
+                            other_var = default[2:-1]
+                            return os.getenv(other_var, default)
+                        return default
+                    return value
+                else:
+                    var_name = full_expr
+                    value = os.getenv(var_name)
+                    if value is None:
+                        print(f"⚠️ Environment Variable nicht gefunden: {var_name}")
+                        return match.group(0)  # Original beibehalten
+                    return value
             
-            return re.sub(r'\$\{([A-Z_]+)\}', replacer, obj)
+            # Pattern: ${VAR} oder ${VAR:-default} oder ${VAR:-${OTHER}}
+            return re.sub(r'\$\{([A-Za-z_][A-Za-z0-9_]*(?::-[^}]*)?)\}', replacer, obj)
         else:
             return obj
     

@@ -5,11 +5,13 @@ name: "CRM Handler"
 description: "Business Logic Agent mit Tool-Calling für Kontakte, Tasks, Notizen und Dynamic Field Enrichment"
 version: "2.2"
 
-# LLM Configuration (Self-hosted Ministral on trooper.ai)
+# LLM Configuration
+# WICHTIG: CRM-Handler braucht ein Modell mit Tool-Support (GPT-4, Claude, etc.)
+# Ministral-14b auf Ollama unterstützt KEINE Tools!
 model:
-  name: "${BASIC_LLM_MODEL_NAME}"
-  base_url: "${BASIC_LLM_URL}"
-  api_key: "${BASIC_LLM_KEY}"
+  name: "${TOOL_LLM_MODEL_NAME:-gpt-4o-mini}"
+  base_url: "${TOOL_LLM_URL:-}"
+  api_key: "${TOOL_LLM_KEY:-${OPENAI_API_KEY}}"
 
 # LLM Parameters (optimized for structured output)
 parameters:
