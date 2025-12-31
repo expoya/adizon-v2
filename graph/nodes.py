@@ -261,10 +261,11 @@ def crm_node(state: AdizonState) -> dict:
     tools_with_state = _wrap_tools_for_state(base_tools, state)
     
     # ReAct Agent erstellen
+    # Note: In langgraph-prebuilt >= 0.5.x wurde 'state_modifier' durch 'prompt' ersetzt
     react_agent = create_react_agent(
-        llm,
-        tools_with_state,
-        state_modifier=system_prompt
+        model=llm,
+        tools=tools_with_state,
+        prompt=system_prompt
     )
     
     # Agent ausführen
