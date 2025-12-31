@@ -113,13 +113,13 @@ def _clear_undo_context(user_id: str):
 
 # === FACTORY ===
 
-def get_crm_tools_for_user(user_id: str, user: Optional['User'] = None) -> list:
+def get_crm_tools_for_user(user_id: str, user: Optional[dict] = None) -> list:
     """
     Erstellt ein Tool-Set speziell für diesen User.
     
     Args:
         user_id: Platform-spezifische User-ID
-        user: Optional User-Objekt für CRM-Attribution
+        user: Optional User-Dict (von user.to_dict()) für CRM-Attribution
         
     Returns:
         Liste von StructuredTools für den CRM Agent
@@ -127,8 +127,8 @@ def get_crm_tools_for_user(user_id: str, user: Optional['User'] = None) -> list:
     
     # Attribution Suffix (wird an Notes/Tasks angehängt)
     attribution = ""
-    if user and hasattr(user, 'crm_display_name'):
-        attribution = f"\n\n---\n_✍️ via {user.crm_display_name}_"
+    if user and user.get("crm_display_name"):
+        attribution = f"\n\n---\n_✍️ via {user['crm_display_name']}_"
     
     def _extract_id(text: str) -> Optional[str]:
         """Extrahiert ID aus Tool-Output"""

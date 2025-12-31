@@ -83,7 +83,7 @@ def auth_node(state: AdizonState) -> dict:
             if user.is_approved and user.is_active:
                 print(f"✅ Auth: User {user.name} authenticated")
                 return {
-                    "user": user,
+                    "user": user.to_dict(),  # Serialize für LangGraph Checkpointer
                     "session_state": state.get("session_state", "IDLE"),
                     "dialog_state": state.get("dialog_state", {}),
                     "last_action_context": state.get("last_action_context", {}),
@@ -214,7 +214,7 @@ def chat_node(state: AdizonState) -> dict:
     Für Smalltalk, Begrüßungen, allgemeine Fragen.
     """
     user = state.get("user")
-    user_name = user.name if user else "User"
+    user_name = user["name"] if user else "User"  # user ist jetzt ein dict
     
     # LLM mit Chat-Config
     llm = get_llm_from_config("chat_handler")
@@ -252,7 +252,7 @@ def crm_node(state: AdizonState) -> dict:
     if not user:
         return {"messages": [AIMessage(content="❌ Nicht authentifiziert.")]}
     
-    user_name = user.name
+    user_name = user["name"]  # user ist jetzt ein dict
     user_id = state["user_id"]
     current_date = datetime.now().strftime("%d.%m.%Y")
     

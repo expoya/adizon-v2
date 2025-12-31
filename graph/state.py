@@ -39,8 +39,8 @@ class AdizonState(TypedDict):
     # Conversation
     messages: Annotated[list[BaseMessage], add_messages]
     
-    # User Context (aus Auth Node)
-    user: Optional[Any]  # User Model aus DB (Any um zirkuläre Imports zu vermeiden)
+    # User Context (aus Auth Node) - serialisiert als dict via user.to_dict()
+    user: Optional[dict]  # User-Dict (id, email, name, crm_display_name, etc.)
     user_id: str
     platform: str
     chat_id: str
