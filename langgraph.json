@@ -1,0 +1,7 @@
+{
+    "dependencies": ["."],
+    "graphs": {
+      "adizon_bot": "./graph/builder.py:graph"
+    },
+    "env": ".env"
+  }
