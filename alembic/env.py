@@ -22,7 +22,7 @@ config = context.config
 # Load DATABASE_URL from environment
 from dotenv import load_dotenv
 load_dotenv()
-database_url = os.getenv("DATABASE_URL", "postgresql://adizon:adizon_dev_password@localhost:5432/adizon_users")
+database_url = os.getenv("DATABASE_URL", "postgresql+psycopg://adizon:adizon_dev_password@localhost:5432/adizon_users")
 config.set_main_option("sqlalchemy.url", database_url)
 
 # Interpret the config file for Python logging.
