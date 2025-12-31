@@ -48,8 +48,8 @@ def get_llm_from_config(config_name: str) -> ChatOpenAI:
         api_key=model_config.get("api_key") or os.getenv("OPENAI_API_KEY"),
         temperature=params.get("temperature", 0.1),
         max_tokens=params.get("max_tokens", 500),
-        timeout=30,  # 30 Sekunden Timeout statt unendlich warten
-        max_retries=2,  # Maximal 2 Retries
+        timeout=120,  # 120 Sekunden - GPU braucht Zeit zum Laden
+        max_retries=1,  # Nur 1 Retry um nicht zu lange zu blockieren
     )
 
 
