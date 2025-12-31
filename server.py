@@ -67,16 +67,11 @@ async def lifespan(app: FastAPI):
         # Checkpointer mit Pool
         checkpointer = AsyncPostgresSaver(pool)
         
-        # Checkpointer-Tabellen erstellen (falls nicht vorhanden)
-        # Note: setup() kann bei CONCURRENTLY fehlschlagen, Tabellen existieren dann bereits
-        try:
-            await checkpointer.setup()
-        except Exception as setup_err:
-            err_msg = str(setup_err).lower()
-            if "already exists" in err_msg or "concurrently" in err_msg:
-                print("ℹ️ Checkpointer tables already exist (skipping setup)")
-            else:
-                raise setup_err
+        # Checkpointer-Tabellen erstellen
+        # Note: setup() benötigt autocommit wegen CREATE INDEX CONCURRENTLY
+        import psycopg
+        async with await psycopg.AsyncConnection.connect(pg_url, autocommit=True) as setup_conn:
+            await AsyncPostgresSaver.create_tables(setup_conn)
         
         print("✅ PostgreSQL Checkpointer initialized")
         
