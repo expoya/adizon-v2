@@ -36,12 +36,20 @@ def get_llm_from_config(config_name: str) -> ChatOpenAI:
     model_config = config.get_model_config()
     params = config.get_parameters()
     
+    base_url = model_config.get("base_url")
+    model_name = model_config.get("name", "ministral-14b")
+    
+    # Debug-Ausgabe für Troubleshooting
+    print(f"🔧 LLM Config [{config_name}]: model={model_name}, base_url={base_url}")
+    
     return ChatOpenAI(
-        model=model_config.get("name", "ministral-14b"),
-        base_url=model_config.get("base_url"),  # z.B. http://connect01.trooper.ai:28030/ollama/v1
+        model=model_name,
+        base_url=base_url,
         api_key=model_config.get("api_key") or os.getenv("OPENAI_API_KEY"),
         temperature=params.get("temperature", 0.1),
         max_tokens=params.get("max_tokens", 500),
+        timeout=30,  # 30 Sekunden Timeout statt unendlich warten
+        max_retries=2,  # Maximal 2 Retries
     )
 
 
