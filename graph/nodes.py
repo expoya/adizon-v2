@@ -9,7 +9,6 @@ from typing import Literal
 
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_openai import ChatOpenAI
-from langchain_ollama import ChatOllama
 
 from utils.database import SessionLocal
 from utils.agent_config import load_agent_config
@@ -20,49 +19,30 @@ from .state import AdizonState
 
 # === HELPER: LLM Factory ===
 
-def get_llm_from_config(config_name: str):
+def get_llm_from_config(config_name: str) -> ChatOpenAI:
     """
-    Erstellt LLM Instanz aus YAML-Config.
-    Verwendet ChatOllama für Ollama-basierte Modelle, sonst ChatOpenAI.
+    Erstellt ChatOpenAI Instanz aus YAML-Config.
+    
+    Unser Server (trooper.ai) emuliert die OpenAI-API, daher nutzen wir
+    ausschließlich ChatOpenAI - auch für selbst gehostete Modelle.
     
     Args:
         config_name: Name der Config (z.B. 'crm_handler')
         
     Returns:
-        Konfigurierte LLM Instanz (ChatOllama oder ChatOpenAI)
+        Konfigurierte ChatOpenAI Instanz
     """
     config = load_agent_config(config_name)
     model_config = config.get_model_config()
     params = config.get_parameters()
     
-    base_url = model_config.get("base_url", "")
-    model_name = model_config.get("name", "gpt-4")
-    
-    # Prüfe ob Ollama-basiert (base_url enthält typische Ollama-Endpunkte)
-    is_ollama = base_url and ("ollama" in base_url.lower() or 
-                               ":11434" in base_url or 
-                               "trooper" in base_url.lower())
-    
-    if is_ollama:
-        # Ollama: Native API mit voller Tool-Unterstützung
-        # Extrahiere Host aus base_url (entferne /v1 falls vorhanden)
-        ollama_host = base_url.replace("/v1", "").rstrip("/")
-        
-        return ChatOllama(
-            model=model_name,
-            base_url=ollama_host,
-            temperature=params.get("temperature", 0.7),
-            num_predict=params.get("max_tokens", 500),
-        )
-    else:
-        # OpenAI oder andere OpenAI-kompatible APIs
-        return ChatOpenAI(
-            model=model_name,
-            base_url=base_url if base_url else None,
-            api_key=model_config.get("api_key") or os.getenv("OPENAI_API_KEY"),
-            temperature=params.get("temperature", 0.7),
-            max_tokens=params.get("max_tokens", 500),
-        )
+    return ChatOpenAI(
+        model=model_config.get("name", "ministral-14b"),
+        base_url=model_config.get("base_url"),  # z.B. http://connect01.trooper.ai:28030/ollama/v1
+        api_key=model_config.get("api_key") or os.getenv("OPENAI_API_KEY"),
+        temperature=params.get("temperature", 0.1),
+        max_tokens=params.get("max_tokens", 500),
+    )
 
 
 # === NODE 1: Auth Node ===
