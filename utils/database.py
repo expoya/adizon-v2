@@ -10,7 +10,14 @@ from sqlalchemy.orm import sessionmaker, Session
 from typing import Generator
 
 # Database URL aus Environment
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://adizon:adizon_dev_password@localhost:5432/adizon_users")
+# Hinweis: psycopg3 (psycopg) verwendet "postgresql+psycopg://" Dialekt
+_raw_url = os.getenv("DATABASE_URL", "postgresql://adizon:adizon_dev_password@localhost:5432/adizon_users")
+
+# Automatische Konvertierung für SQLAlchemy + psycopg3
+if _raw_url.startswith("postgresql://") and "+psycopg" not in _raw_url:
+    DATABASE_URL = _raw_url.replace("postgresql://", "postgresql+psycopg://", 1)
+else:
+    DATABASE_URL = _raw_url
 
 # SQLAlchemy Engine
 # pool_pre_ping=True: Test connection before using (automatic reconnect)

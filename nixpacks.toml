@@ -12,5 +12,6 @@ cmds = [
 cmds = [". /opt/venv/bin/activate && python -m compileall ."]
 
 [start]
-cmd = ". /opt/venv/bin/activate && alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port $PORT"
+# LangGraph Migration: main.py -> server.py
+cmd = ". /opt/venv/bin/activate && alembic upgrade head && uvicorn server:app --host 0.0.0.0 --port $PORT"
 
