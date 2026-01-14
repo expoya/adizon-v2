@@ -6,6 +6,7 @@ FastAPI Entrypoint mit PostgreSQL Checkpointing
 import os
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
@@ -22,6 +23,11 @@ from tools.chat import get_chat_adapter, StandardMessage
 from api.users import router as users_router
 from utils.database import DATABASE_URL
 
+# === CONSTANTS ===
+KILLSWITCH_COMMAND = "//RESET"
+KILLSWITCH_RESPONSE = "Alles klar! Mein Gedächtnis ist gelöscht. Womit fangen wir neu an? 🧠✨"
+SESSION_TIMEOUT_MINUTES = 15
+
 # Load Environment
 load_dotenv()
 
@@ -29,6 +35,77 @@ load_dotenv()
 pool: AsyncConnectionPool = None
 checkpointer: AsyncPostgresSaver = None
 graph = None
+
+# In-memory Session Timestamps (user_id -> last_activity)
+# Für Session-Timeout Tracking
+_session_timestamps: dict[str, datetime] = {}
+
+
+# === SESSION MANAGEMENT HELPERS ===
+
+async def clear_user_session(user_id: str) -> bool:
+    """
+    Löscht die komplette Session eines Users (Checkpoint + Timestamp).
+
+    Args:
+        user_id: Platform-spezifische User-ID (z.B. "telegram:123456")
+
+    Returns:
+        True wenn erfolgreich, False bei Fehler
+    """
+    global pool, _session_timestamps
+
+    # Timestamp löschen
+    if user_id in _session_timestamps:
+        del _session_timestamps[user_id]
+
+    # Checkpoint aus PostgreSQL löschen
+    if pool:
+        try:
+            async with pool.connection() as conn:
+                # LangGraph Checkpoint-Tabellen: checkpoint, checkpoint_blobs, checkpoint_writes
+                await conn.execute(
+                    "DELETE FROM checkpoint_writes WHERE thread_id = %s",
+                    (user_id,)
+                )
+                await conn.execute(
+                    "DELETE FROM checkpoint_blobs WHERE thread_id = %s",
+                    (user_id,)
+                )
+                await conn.execute(
+                    "DELETE FROM checkpoints WHERE thread_id = %s",
+                    (user_id,)
+                )
+                print(f"🗑️ Session cleared for {user_id}")
+                return True
+        except Exception as e:
+            print(f"⚠️ Failed to clear session: {e}")
+            return False
+    return True
+
+
+def is_session_expired(user_id: str) -> bool:
+    """
+    Prüft ob die Session eines Users abgelaufen ist (> SESSION_TIMEOUT_MINUTES).
+
+    Args:
+        user_id: Platform-spezifische User-ID
+
+    Returns:
+        True wenn Session abgelaufen oder nicht existiert
+    """
+    if user_id not in _session_timestamps:
+        return True
+
+    last_activity = _session_timestamps[user_id]
+    timeout_threshold = datetime.utcnow() - timedelta(minutes=SESSION_TIMEOUT_MINUTES)
+
+    return last_activity < timeout_threshold
+
+
+def update_session_timestamp(user_id: str) -> None:
+    """Aktualisiert den Timestamp der letzten Aktivität."""
+    _session_timestamps[user_id] = datetime.utcnow()
 
 
 # === LIFESPAN MANAGEMENT ===
@@ -166,9 +243,9 @@ async def webhook(platform: str, request: Request, background_tasks: BackgroundT
     if not adapter.validate_webhook(body):
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
     
-    # Message parsen
+    # Message parsen (async für Voice/Audio Transcription)
     try:
-        msg: StandardMessage = adapter.parse_incoming(body)
+        msg: StandardMessage = await adapter.parse_incoming(body)
     except Exception as e:
         print(f"⚠️ Webhook parse error: {e}")
         # Bei Parse-Fehlern still beenden (z.B. Bot-Messages)
@@ -179,7 +256,22 @@ async def webhook(platform: str, request: Request, background_tasks: BackgroundT
         return {"ok": True}
     
     print(f"📨 Incoming [{platform}]: {msg.user_name}: {msg.text[:50]}...")
-    
+
+    # === KILLSWITCH CHECK ===
+    if msg.text.strip().upper() == KILLSWITCH_COMMAND.upper():
+        print(f"💥 Killswitch triggered by {msg.user_id}")
+        await clear_user_session(msg.user_id)
+        await adapter.send_message(msg.chat_id, KILLSWITCH_RESPONSE)
+        return {"ok": True}
+
+    # === SESSION TIMEOUT CHECK ===
+    if is_session_expired(msg.user_id):
+        print(f"⏰ Session expired for {msg.user_id} - clearing old state")
+        await clear_user_session(msg.user_id)
+
+    # Update Session Timestamp
+    update_session_timestamp(msg.user_id)
+
     # Initial State
     initial_state: AdizonState = {
         "messages": [HumanMessage(content=msg.text)],
@@ -191,14 +283,14 @@ async def webhook(platform: str, request: Request, background_tasks: BackgroundT
         "dialog_state": {},
         "last_action_context": {},
     }
-    
+
     # Graph Config (Thread-ID für Checkpointing)
     config = {
         "configurable": {
             "thread_id": msg.user_id  # Persistente Konversation pro User
         }
     }
-    
+
     # Graph ausführen
     try:
         # Graph wurde bereits mit Checkpointer kompiliert (falls verfügbar)
@@ -214,8 +306,8 @@ async def webhook(platform: str, request: Request, background_tasks: BackgroundT
                     break
         
         if response_text:
-            # Antwort senden
-            adapter.send_message(msg.chat_id, response_text)
+            # Antwort senden (async)
+            await adapter.send_message(msg.chat_id, response_text)
             print(f"📤 Response sent: {response_text[:50]}...")
         
     except Exception as e:
@@ -223,8 +315,8 @@ async def webhook(platform: str, request: Request, background_tasks: BackgroundT
         import traceback
         traceback.print_exc()
         
-        # Fehler-Antwort
-        adapter.send_message(
+        # Fehler-Antwort (async)
+        await adapter.send_message(
             msg.chat_id, 
             "❌ Es ist ein Fehler aufgetreten. Bitte versuche es erneut."
         )
