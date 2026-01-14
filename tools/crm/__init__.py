@@ -50,6 +50,7 @@ create_task_func = mock_task
 create_note_func = mock_note
 update_entity_func = None
 get_details_func = None
+get_company_details_func = None
 
 
 # === ADAPTER SELECTION ===
@@ -64,6 +65,7 @@ if crm_system == "TWENTY":
         create_note_func = adapter.create_note
         update_entity_func = adapter.update_entity
         get_details_func = adapter.get_person_details
+        get_company_details_func = adapter.get_company_details
         print("✅ Twenty Adapter connected")
     except Exception as e:
         print(f"❌ Twenty Adapter Error: {e}")
@@ -264,17 +266,31 @@ def get_crm_tools_for_user(user_id: str, user: Optional[dict] = None) -> list:
     
     def get_contact_details_wrapper(contact_id: str) -> str:
         """
-        Ruft alle Details eines Kontakts ab (Phone, Birthday, Custom Fields, etc.).
-        
+        Ruft alle Details eines Kontakts/Person ab (Phone, Birthday, Custom Fields, etc.).
+
         Args:
             contact_id: CRM ID des Kontakts (UUID für Twenty, numerisch für Zoho)
-            
-        Nutze wenn User nach spezifischen Feldern fragt oder du mehr Details brauchst.
+
+        Nutze wenn User nach spezifischen Feldern einer PERSON fragt oder du mehr Details brauchst.
         """
         if not get_details_func:
             return "❌ Get-Details nicht verfügbar (nur im Live-Modus)."
-        
+
         return get_details_func(contact_id)
+
+    def get_company_details_wrapper(company_id: str) -> str:
+        """
+        Ruft alle Details einer FIRMA ab (Website, LinkedIn, Mitarbeiter, Adresse, etc.).
+
+        Args:
+            company_id: CRM ID der Firma (UUID für Twenty)
+
+        Nutze wenn User nach Website, Firmendaten oder Company-Details fragt.
+        """
+        if not get_company_details_func:
+            return "❌ Get-Company-Details nicht verfügbar (nur im Live-Modus)."
+
+        return get_company_details_func(company_id)
 
     # === TOOL LIST ===
     
@@ -321,10 +337,19 @@ def get_crm_tools_for_user(user_id: str, user: Optional[dict] = None) -> list:
             StructuredTool.from_function(
                 get_contact_details_wrapper,
                 name="get_contact_details",
-                description="Ruft ALLE Details eines Kontakts ab (Phone, Birthday, Custom Fields, etc.)"
+                description="Ruft ALLE Details einer PERSON ab (Phone, Birthday, Custom Fields, etc.)"
             )
         )
-    
+
+    if get_company_details_func:
+        tools.append(
+            StructuredTool.from_function(
+                get_company_details_wrapper,
+                name="get_company_details",
+                description="Ruft ALLE Details einer FIRMA ab (Website, LinkedIn, Adresse, Mitarbeiter, etc.)"
+            )
+        )
+
     return tools
 
 

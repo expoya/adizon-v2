@@ -320,7 +320,104 @@ class TwentyCRM:
         except Exception as e:
             print(f"❌ Get Person Details Error: {e}")
             return f"❌ Fehler beim Abrufen von Person {person_id}: {str(e)}"
-    
+
+    def get_company_details(self, company_id: str) -> str:
+        """
+        Ruft alle Details einer Firma ab (inkl. Website, Mitarbeiter, etc.).
+
+        Args:
+            company_id: Twenty Company UUID
+
+        Returns:
+            Formatierte Details der Firma
+        """
+        print(f"📋 Getting details for Company ID: {company_id}")
+
+        try:
+            # Hole Company mit allen Feldern
+            response = self._request("GET", f"companies/{company_id}")
+
+            if not response:
+                return f"❌ Firma mit ID {company_id} nicht gefunden."
+
+            # Twenty gibt zurück: {"company": {...}} oder direkt {...}
+            company = response.get("company", response) if isinstance(response, dict) else response
+
+            # Extract wichtige Felder
+            name = company.get("name", "")
+
+            # Domain/Website (Twenty Schema: domainName ist links_object)
+            domain_obj = company.get("domainName", {})
+            website = ""
+            if isinstance(domain_obj, dict):
+                website = domain_obj.get("primaryLinkUrl", "")
+            elif isinstance(domain_obj, str):
+                website = domain_obj
+
+            # LinkedIn
+            linkedin_obj = company.get("linkedinLink", {})
+            linkedin = linkedin_obj.get("primaryLinkUrl", "") if isinstance(linkedin_obj, dict) else ""
+
+            # X/Twitter
+            x_obj = company.get("xLink", {})
+            x_link = x_obj.get("primaryLinkUrl", "") if isinstance(x_obj, dict) else ""
+
+            # Address
+            address_obj = company.get("address", {})
+            address = ""
+            if isinstance(address_obj, dict):
+                # Twenty kann Address als Objekt speichern
+                street = address_obj.get("addressStreet1", "")
+                city = address_obj.get("addressCity", "")
+                country = address_obj.get("addressCountry", "")
+                address = ", ".join(filter(None, [street, city, country]))
+            elif isinstance(address_obj, str):
+                address = address_obj
+
+            # Employees (Anzahl)
+            employees = company.get("employees")
+
+            # Ideal Customer Profile / Industry
+            icp = company.get("idealCustomerProfile", "")
+
+            # Created/Updated
+            created_at = company.get("createdAt", "")
+            updated_at = company.get("updatedAt", "")
+
+            # Format Output
+            output = f"🏢 **{name}**\n"
+
+            # Website & Social
+            output += "\n**🌐 Web & Social:**\n"
+            if website:
+                output += f"  • Website: {website}\n"
+            if linkedin:
+                output += f"  • LinkedIn: {linkedin}\n"
+            if x_link:
+                output += f"  • X/Twitter: {x_link}\n"
+
+            # Address
+            if address:
+                output += f"\n**📍 Adresse:** {address}\n"
+
+            # Company Info
+            if employees:
+                output += f"\n**👥 Mitarbeiter:** {employees}\n"
+            if icp:
+                output += f"\n**🎯 Branche/ICP:** {icp}\n"
+
+            # Meta
+            if created_at:
+                output += f"\n**📅 Erstellt:** {created_at[:10]}\n"
+
+            output += f"\n**🆔 ID:** {company_id}"
+
+            return output
+
+        except Exception as e:
+            print(f"❌ Get Company Details Error: {e}")
+            return f"❌ Fehler beim Abrufen von Firma {company_id}: {str(e)}"
+
     def search_contacts(self, query: str) -> str:
         """
         Smart-Fuzzy-Search mit Scoring & Sortierung:
