@@ -1,6 +1,8 @@
 """
 Chat-Adapter Interface
 Abstract Base Class für alle Chat-Plattformen (Telegram, Slack, Teams, etc.)
+
+Fully async interface for non-blocking HTTP operations.
 """
 
 from abc import ABC, abstractmethod
@@ -27,25 +29,26 @@ class StandardMessage:
 
 class ChatAdapter(ABC):
     """
-    Abstract Base Class für Chat-Adapter.
+    Abstract Base Class für Chat-Adapter (async).
     
     Jede Chat-Plattform (Telegram, Slack, Teams, etc.) implementiert diese Interface.
+    All methods are async to prevent blocking the FastAPI event loop.
     
     Beispiel:
         class TelegramAdapter(ChatAdapter):
-            def parse_incoming(self, webhook_data: dict) -> StandardMessage:
+            async def parse_incoming(self, webhook_data: dict) -> StandardMessage:
                 # Parse Telegram-specific webhook
                 ...
             
-            def send_message(self, chat_id: str, text: str) -> bool:
+            async def send_message(self, chat_id: str, text: str) -> bool:
                 # Send via Telegram Bot API
                 ...
     """
     
     @abstractmethod
-    def parse_incoming(self, webhook_data: dict) -> StandardMessage:
+    async def parse_incoming(self, webhook_data: dict) -> StandardMessage:
         """
-        Parst eingehende Webhook-Daten zu StandardMessage.
+        Parst eingehende Webhook-Daten zu StandardMessage (async).
         
         Args:
             webhook_data: Platform-spezifisches Webhook-Format
@@ -59,9 +62,9 @@ class ChatAdapter(ABC):
         pass
     
     @abstractmethod
-    def send_message(self, chat_id: str, text: str) -> bool:
+    async def send_message(self, chat_id: str, text: str) -> bool:
         """
-        Sendet Nachricht über die Plattform.
+        Sendet Nachricht über die Plattform (async).
         
         Args:
             chat_id: Platform-specific Chat/Channel ID
@@ -128,4 +131,3 @@ class WebhookParseError(ChatAdapterError):
 class MessageSendError(ChatAdapterError):
     """Nachricht konnte nicht gesendet werden"""
     pass
-

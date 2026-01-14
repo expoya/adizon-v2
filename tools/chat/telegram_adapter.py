@@ -1,22 +1,25 @@
 """
 Telegram Chat Adapter
 Implementierung für Telegram Bot API
+
+Fully async implementation using httpx for non-blocking HTTP calls.
 """
 
 import os
 import uuid
-import requests
+import httpx
 from typing import Optional
 from .interface import ChatAdapter, StandardMessage, WebhookParseError, MessageSendError
 
 
 class TelegramAdapter(ChatAdapter):
     """
-    Chat-Adapter für Telegram.
+    Chat-Adapter für Telegram (async).
     
     Features:
     - Parse Telegram Webhook zu StandardMessage
     - Send Messages via Telegram Bot API
+    - Voice Message Transcription
     - Error-Handling
     
     Env Variables:
@@ -31,9 +34,9 @@ class TelegramAdapter(ChatAdapter):
         self.api_base = f"https://api.telegram.org/bot{self.bot_token}"
         print(f"✅ Telegram Adapter initialized")
     
-    def parse_incoming(self, webhook_data: dict) -> StandardMessage:
+    async def parse_incoming(self, webhook_data: dict) -> StandardMessage:
         """
-        Parst Telegram Webhook zu StandardMessage.
+        Parst Telegram Webhook zu StandardMessage (async).
         
         Telegram Webhook Format (Text):
         {
@@ -87,7 +90,7 @@ class TelegramAdapter(ChatAdapter):
             # Check for Voice Message
             if "voice" in message_data:
                 print("🎤 Voice message detected (Telegram)")
-                text = self._handle_voice_message(message_data["voice"])
+                text = await self._handle_voice_message(message_data["voice"])
             
             # Fallback to Text Message
             elif "text" in message_data:
@@ -115,9 +118,9 @@ class TelegramAdapter(ChatAdapter):
         except Exception as e:
             raise WebhookParseError(f"Failed to parse Telegram webhook: {e}")
     
-    def send_message(self, chat_id: str, text: str) -> bool:
+    async def send_message(self, chat_id: str, text: str) -> bool:
         """
-        Sendet Nachricht via Telegram Bot API.
+        Sendet Nachricht via Telegram Bot API (async).
         
         Args:
             chat_id: Telegram Chat ID (as string)
@@ -134,7 +137,8 @@ class TelegramAdapter(ChatAdapter):
                 "parse_mode": "Markdown"  # Optional: Support für Markdown-Formatierung
             }
             
-            response = requests.post(url, json=payload, timeout=10)
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(url, json=payload)
             
             if response.status_code == 200:
                 print(f"✅ Telegram message sent to chat {chat_id}")
@@ -174,9 +178,9 @@ class TelegramAdapter(ChatAdapter):
     
     # === VOICE MESSAGE HANDLING ===
     
-    def _handle_voice_message(self, voice_data: dict) -> str:
+    async def _handle_voice_message(self, voice_data: dict) -> str:
         """
-        Handles Telegram voice message: Download → Transcribe → Cleanup
+        Handles Telegram voice message: Download → Transcribe → Cleanup (async)
         
         Args:
             voice_data: Telegram voice object with file_id, duration, mime_type
@@ -198,10 +202,10 @@ class TelegramAdapter(ChatAdapter):
         # Download audio file
         audio_path = None
         try:
-            audio_path = self._download_voice_file(file_id)
+            audio_path = await self._download_voice_file(file_id)
             print(f"✅ Audio downloaded: {audio_path}")
             
-            # Transcribe
+            # Transcribe (async)
             from tools.transcription import get_transcriber
             transcriber = get_transcriber()
             
@@ -211,7 +215,7 @@ class TelegramAdapter(ChatAdapter):
                     "Bitte schreibe eine Textnachricht."
                 )
             
-            result = transcriber.transcribe(audio_path)
+            result = await transcriber.transcribe(audio_path)
             print(f"✅ Transcription: '{result.text[:50]}...'")
             
             return result.text
@@ -232,9 +236,9 @@ class TelegramAdapter(ChatAdapter):
                 except Exception as e:
                     print(f"⚠️  Failed to delete temp file: {e}")
     
-    def _download_voice_file(self, file_id: str) -> str:
+    async def _download_voice_file(self, file_id: str) -> str:
         """
-        Download Telegram voice file to /tmp
+        Download Telegram voice file to /tmp (async)
         
         Telegram Bot API:
         1. getFile → returns file_path
@@ -249,25 +253,26 @@ class TelegramAdapter(ChatAdapter):
         Raises:
             Exception: If download fails
         """
-        # Step 1: Get file path
-        get_file_url = f"{self.api_base}/getFile"
-        response = requests.get(get_file_url, params={"file_id": file_id}, timeout=10)
-        
-        if response.status_code != 200:
-            raise Exception(f"getFile failed: {response.status_code} {response.text}")
-        
-        file_data = response.json()
-        if not file_data.get("ok"):
-            raise Exception(f"getFile error: {file_data}")
-        
-        file_path = file_data["result"]["file_path"]
-        
-        # Step 2: Download file
-        download_url = f"https://api.telegram.org/file/bot{self.bot_token}/{file_path}"
-        audio_response = requests.get(download_url, timeout=30)
-        
-        if audio_response.status_code != 200:
-            raise Exception(f"Download failed: {audio_response.status_code}")
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # Step 1: Get file path
+            get_file_url = f"{self.api_base}/getFile"
+            response = await client.get(get_file_url, params={"file_id": file_id})
+            
+            if response.status_code != 200:
+                raise Exception(f"getFile failed: {response.status_code} {response.text}")
+            
+            file_data = response.json()
+            if not file_data.get("ok"):
+                raise Exception(f"getFile error: {file_data}")
+            
+            file_path = file_data["result"]["file_path"]
+            
+            # Step 2: Download file
+            download_url = f"https://api.telegram.org/file/bot{self.bot_token}/{file_path}"
+            audio_response = await client.get(download_url)
+            
+            if audio_response.status_code != 200:
+                raise Exception(f"Download failed: {audio_response.status_code}")
         
         # Step 3: Save to /tmp with unique name
         # Extract extension from file_path (usually .oga or .ogg)
@@ -283,11 +288,10 @@ class TelegramAdapter(ChatAdapter):
 
 # === HELPER FUNCTIONS ===
 
-def send_telegram_message(chat_id: str, text: str) -> bool:
+async def send_telegram_message(chat_id: str, text: str) -> bool:
     """
     Standalone Helper für direktes Senden (ohne Adapter-Instanz).
     Nützlich für Quick-Tests.
     """
     adapter = TelegramAdapter()
-    return adapter.send_message(chat_id, text)
-
+    return await adapter.send_message(chat_id, text)

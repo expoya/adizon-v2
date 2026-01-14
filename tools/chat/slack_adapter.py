@@ -1,22 +1,25 @@
 """
 Slack Chat Adapter
 Implementierung für Slack Bot API
+
+Fully async implementation using httpx for non-blocking HTTP calls.
 """
 
 import os
 import uuid
-import requests
+import httpx
 from typing import Optional, Dict, Any
 from .interface import ChatAdapter, StandardMessage, WebhookParseError, MessageSendError
 
 
 class SlackAdapter(ChatAdapter):
     """
-    Chat-Adapter für Slack.
+    Chat-Adapter für Slack (async).
     
     Features:
     - Parse Slack Event zu StandardMessage
     - Send Messages via Slack Web API
+    - Audio File Transcription
     - Challenge-Handling (Webhook Verification)
     - Error-Handling
     
@@ -42,9 +45,9 @@ class SlackAdapter(ChatAdapter):
         self.api_base = "https://slack.com/api"
         print(f"✅ Slack Adapter initialized")
     
-    def parse_incoming(self, webhook_data: dict) -> StandardMessage:
+    async def parse_incoming(self, webhook_data: dict) -> StandardMessage:
         """
-        Parst Slack Event zu StandardMessage.
+        Parst Slack Event zu StandardMessage (async).
         
         Slack Webhook Format:
         {
@@ -111,7 +114,7 @@ class SlackAdapter(ChatAdapter):
                 
                 if mimetype.startswith("audio/"):
                     print("🎤 Audio file detected (Slack)")
-                    text = self._handle_audio_file(first_file)
+                    text = await self._handle_audio_file(first_file)
             
             # Fallback to Text Message
             if not text:
@@ -126,8 +129,8 @@ class SlackAdapter(ChatAdapter):
             if not text:
                 raise WebhookParseError("Missing 'event.text' or audio file in Slack webhook")
             
-            # Get User Name via Slack API (optional, can be cached)
-            user_name = self._get_user_name(user_id)
+            # Get User Name via Slack API (async)
+            user_name = await self._get_user_name(user_id)
             
             # Create StandardMessage
             return StandardMessage(
@@ -144,9 +147,9 @@ class SlackAdapter(ChatAdapter):
         except Exception as e:
             raise WebhookParseError(f"Failed to parse Slack webhook: {e}")
     
-    def send_message(self, chat_id: str, text: str) -> bool:
+    async def send_message(self, chat_id: str, text: str) -> bool:
         """
-        Sendet Nachricht via Slack Web API.
+        Sendet Nachricht via Slack Web API (async).
         
         Args:
             chat_id: Slack Channel ID (z.B. "C123456")
@@ -166,7 +169,8 @@ class SlackAdapter(ChatAdapter):
                 "text": text
             }
             
-            response = requests.post(url, json=payload, headers=headers, timeout=10)
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(url, json=payload, headers=headers)
             
             if response.status_code == 200:
                 data = response.json()
@@ -210,9 +214,9 @@ class SlackAdapter(ChatAdapter):
         """
         return True
     
-    def _get_user_name(self, user_id: str) -> str:
+    async def _get_user_name(self, user_id: str) -> str:
         """
-        Holt User-Name via Slack users.info API.
+        Holt User-Name via Slack users.info API (async).
         
         Args:
             user_id: Slack User ID (z.B. "U123456")
@@ -225,7 +229,8 @@ class SlackAdapter(ChatAdapter):
             headers = {"Authorization": f"Bearer {self.bot_token}"}
             params = {"user": user_id}
             
-            response = requests.get(url, headers=headers, params=params, timeout=5)
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(url, headers=headers, params=params)
             
             if response.status_code == 200:
                 data = response.json()
@@ -248,9 +253,9 @@ class SlackAdapter(ChatAdapter):
     
     # === AUDIO FILE HANDLING ===
     
-    def _handle_audio_file(self, file_data: dict) -> str:
+    async def _handle_audio_file(self, file_data: dict) -> str:
         """
-        Handles Slack audio file: Download → Transcribe → Cleanup
+        Handles Slack audio file: Download → Transcribe → Cleanup (async)
         
         Args:
             file_data: Slack file object with url_private, mimetype, size, etc.
@@ -274,10 +279,10 @@ class SlackAdapter(ChatAdapter):
         # Download audio file
         audio_path = None
         try:
-            audio_path = self._download_audio_file(file_url, mimetype)
+            audio_path = await self._download_audio_file(file_url, mimetype)
             print(f"✅ Audio downloaded: {audio_path}")
             
-            # Transcribe
+            # Transcribe (async)
             from tools.transcription import get_transcriber
             transcriber = get_transcriber()
             
@@ -287,7 +292,7 @@ class SlackAdapter(ChatAdapter):
                     "Bitte schreibe eine Textnachricht."
                 )
             
-            result = transcriber.transcribe(audio_path)
+            result = await transcriber.transcribe(audio_path)
             print(f"✅ Transcription: '{result.text[:50]}...'")
             
             return result.text
@@ -308,9 +313,9 @@ class SlackAdapter(ChatAdapter):
                 except Exception as e:
                     print(f"⚠️  Failed to delete temp file: {e}")
     
-    def _download_audio_file(self, file_url: str, mimetype: str) -> str:
+    async def _download_audio_file(self, file_url: str, mimetype: str) -> str:
         """
-        Download Slack audio file to /tmp
+        Download Slack audio file to /tmp (async)
         
         Slack requires OAuth Bearer Token for url_private downloads.
         
@@ -338,9 +343,11 @@ class SlackAdapter(ChatAdapter):
             }
             ext = ext_map.get(mimetype, mimetype.split("/")[1])
         
-        # Download with OAuth Bearer Token
+        # Download with OAuth Bearer Token (async)
         headers = {"Authorization": f"Bearer {self.bot_token}"}
-        response = requests.get(file_url, headers=headers, timeout=30)
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(file_url, headers=headers)
         
         if response.status_code != 200:
             raise Exception(f"Slack file download failed: {response.status_code} {response.text}")
@@ -357,13 +364,13 @@ class SlackAdapter(ChatAdapter):
 
 # === HELPER FUNCTIONS ===
 
-def send_slack_message(channel_id: str, text: str) -> bool:
+async def send_slack_message(channel_id: str, text: str) -> bool:
     """
     Standalone Helper für direktes Senden (ohne Adapter-Instanz).
     Nützlich für Quick-Tests.
     """
     adapter = SlackAdapter()
-    return adapter.send_message(channel_id, text)
+    return await adapter.send_message(channel_id, text)
 
 
 def handle_slack_challenge(webhook_data: dict) -> Optional[str]:
@@ -381,4 +388,3 @@ def handle_slack_challenge(webhook_data: dict) -> Optional[str]:
     if webhook_data.get("type") == "url_verification":
         return webhook_data.get("challenge")
     return None
-
