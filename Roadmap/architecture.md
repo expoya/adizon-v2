@@ -314,7 +314,7 @@ flowchart TB
 
 ```mermaid
 flowchart TD
-    MSG[Incoming Message] --> KILL{Text == "##RESTART##"?}
+    MSG[Incoming Message] --> KILL{Text == "RESTART"?}
 
     KILL -->|Ja| CLEAR[Session löschen<br/>Checkpoint + Timestamp]
     CLEAR --> RESPONSE1["Alles klar! Mein Gedächtnis<br/>ist gelöscht..."]
@@ -333,7 +333,7 @@ flowchart TD
 
 | Feature | Wert | Beschreibung |
 |---------|------|--------------|
-| **Killswitch** | `##RESTART##` | Löscht komplette Session (Messages + State) |
+| **Killswitch** | `RESTART` | Löscht komplette Session (Messages + State) |
 | **Timeout** | 15 Minuten | Automatischer Reset bei Inaktivität |
 | **Response** | Standardnachricht | "Alles klar! Mein Gedächtnis ist gelöscht..." |
 

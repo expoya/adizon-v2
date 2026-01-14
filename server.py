@@ -24,7 +24,7 @@ from api.users import router as users_router
 from utils.database import DATABASE_URL
 
 # === CONSTANTS ===
-KILLSWITCH_COMMAND = "##RESTART##"
+KILLSWITCH_COMMAND = "RESTART"
 KILLSWITCH_RESPONSE = "Alles klar! Mein Gedächtnis ist gelöscht. Womit fangen wir neu an? 🧠✨"
 SESSION_TIMEOUT_MINUTES = 15
 
